@@ -3,6 +3,26 @@ import axios from 'axios';
 
 const API = process.env.REACT_APP_API_URL || 'https://todi-production-6cad.up.railway.app/api';
 
+// 로그인한 사용자의 닉네임 (없으면 빈 문자열)
+const getNickname = () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem('todi_user'));
+    return saved && saved.nickname ? saved.nickname : '';
+  } catch (e) {
+    return '';
+  }
+};
+
+// 모든 API 요청에 닉네임 헤더를 자동으로 붙임 (서버가 이 닉네임의 데이터만 돌려줘).
+// 한글은 HTTP 헤더에 그대로 못 넣어서 encodeURIComponent로 인코딩해서 보냄
+axios.interceptors.request.use((config) => {
+  const nickname = getNickname();
+  if (nickname) {
+    config.headers['X-Nickname'] = encodeURIComponent(nickname);
+  }
+  return config;
+});
+
 const C = {
   bg: '#FFF0F5',
   card: '#FFFFFF',
@@ -518,14 +538,20 @@ function MemoTab() {
   const getImageUrl = (img) => {
     if (!img) return '';
     const url = img.url || img.fallbackUrl || '';
-    if (url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('http://') || url.startsWith('https://')) {
+    // 브라우저 로컬 이미지는 서버를 거치지 않으니 그대로
+    if (url.startsWith('data:') || url.startsWith('blob:')) {
       return url;
     }
-    const baseUrl = API.replace('/api', '');
-    if (url.startsWith('/')) {
-      return `${baseUrl}${url}`;
+    let fullUrl;
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      fullUrl = url;
+    } else {
+      const baseUrl = API.replace('/api', '');
+      fullUrl = url.startsWith('/') ? `${baseUrl}${url}` : `${baseUrl}/${url}`;
     }
-    return `${baseUrl}/${url}`;
+    // <img src>는 헤더를 못 보내서, 서버 이미지 주소에는 닉네임을 쿼리로 붙임
+    const separator = fullUrl.includes('?') ? '&' : '?';
+    return `${fullUrl}${separator}nickname=${encodeURIComponent(getNickname())}`;
   };
 
   const uploadImage = async (e) => {
@@ -1042,6 +1068,5 @@ function AuthScreen({ onLogin }) {
       </div>
   );
 }
-
 
 
