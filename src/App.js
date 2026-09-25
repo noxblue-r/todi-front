@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 
-const API = process.env.REACT_APP_API_URL || 'http://192.168.219.155:8080/api';
+const API = process.env.REACT_APP_API_URL || 'https://todi-production-6cad.up.railway.app/api';
 
 const C = {
   bg: '#FFF0F5',
@@ -221,13 +221,13 @@ export default function App() {
 
               {/* 중앙 플러스 추가 버튼 */}
               <div style={{flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center'}}>
-                <button 
-                  onClick={() => setShowForm(true)} 
+                <button
+                  onClick={() => setShowForm(true)}
                   style={{
-                    width: 46, height: 46, borderRadius: 23, 
-                    background: `linear-gradient(135deg, ${C.pinkDark}, ${C.lavender})`, 
-                    color: 'white', fontSize: 26, fontWeight: 700, border: 'none', 
-                    cursor: 'pointer', boxShadow: `0 4px 14px rgba(255,92,138,0.4)`, 
+                    width: 46, height: 46, borderRadius: 23,
+                    background: `linear-gradient(135deg, ${C.pinkDark}, ${C.lavender})`,
+                    color: 'white', fontSize: 26, fontWeight: 700, border: 'none',
+                    cursor: 'pointer', boxShadow: `0 4px 14px rgba(255,92,138,0.4)`,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     transform: 'translateY(-6px)', transition: 'all 0.15s ease'
                   }}
