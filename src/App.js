@@ -102,7 +102,6 @@ export default function App() {
   const selectedTodos = todos.filter(t => t.dueDate === selectedDate);
   const completed = todayTodos.filter(t => t.completed);
   const rate = todayTodos.length === 0 ? 0 : Math.round((completed.length / todayTodos.length) * 100);
-  const subjects = [...new Set(todos.map(t => t.subject).filter(Boolean))];
 
   return (
       <div style={{background: C.bg, minHeight: '100vh', maxWidth: 480, margin: '0 auto', fontFamily: '-apple-system, sans-serif', color: C.text}}>
