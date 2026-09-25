@@ -18,8 +18,20 @@ const C = {
 
 const PRIORITY_COLOR = { HIGH: '#FF5C8A', MEDIUM: '#FFD93D', LOW: '#A8E6CF' };
 
+// 카테고리 기본 색상 팔레트 (새 카테고리 만들 때 고르는 색)
+const CATEGORY_COLORS = ['#FF8FAB', '#C9A7FF', '#7FB5FF', '#7ED6B0', '#FFD93D', '#FFA96B'];
+
+// 서버 에러 응답에서 사용자에게 보여줄 메시지 꺼내기 (409 중복, 400 형식 오류 등)
+const errorMessage = (err) => {
+  const data = err.response?.data;
+  if (data && typeof data === 'object') {
+    return data.message || Object.values(data)[0] || '요청에 실패했어요.';
+  }
+  return '요청에 실패했어요.';
+};
+
 const defaultForm = {
-  title: '', memo: '', category: '', priority: 'MEDIUM',
+  title: '', memo: '', categoryId: '', priority: 'MEDIUM',
   dueDate: new Date().toISOString().split('T')[0],
   isRoutine: false, subject: '', studyType: 'ETC', estimatedTime: 0
 };
@@ -39,6 +51,9 @@ export default function App() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(defaultForm);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [groups, setGroups] = useState([]);                // 카테고리별로 묶인 오늘 할 일
+  const [showCatManager, setShowCatManager] = useState(false);
+  const categories = groups.filter(g => g.id !== null);    // "미분류"(id null)를 뺀 실제 카테고리
 
   const fetchTodos = async () => {
     try {
@@ -49,8 +64,23 @@ export default function App() {
     }
   };
 
+  const fetchGroups = async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const res = await axios.get(`${API}/categories/grouped`, { params: { date: today } });
+      setGroups(res.data);
+    } catch (err) {
+      console.error('Failed to fetch groups:', err);
+    }
+  };
+
+  const refresh = () => {
+    fetchTodos();
+    fetchGroups();
+  };
+
   useEffect(() => {
-    if (user) fetchTodos();
+    if (user) refresh();
   }, [user]);
 
   const handleLogin = (userData) => {
@@ -67,13 +97,24 @@ export default function App() {
     return <AuthScreen onLogin={handleLogin} />;
   }
 
+  // 폼 열기. 카테고리 헤더의 + 버튼으로 열면 그 카테고리가 미리 선택돼
+  const openForm = (categoryId) => {
+    setForm({ ...defaultForm, categoryId: categoryId ?? '' });
+    setShowForm(true);
+  };
+
   const addTodo = async () => {
     if (!form.title.trim()) return;
     try {
-      await axios.post(`${API}/todos`, { ...form, nickname: user.nickname });
+      const body = {
+        ...form,
+        categoryId: form.categoryId === '' ? null : Number(form.categoryId),
+        nickname: user.nickname,
+      };
+      await axios.post(`${API}/todos`, body);
       setForm(defaultForm);
       setShowForm(false);
-      fetchTodos();
+      refresh();
     } catch (err) {
       console.error('Failed to add todo:', err);
     }
@@ -82,7 +123,7 @@ export default function App() {
   const toggleComplete = async (id) => {
     try {
       await axios.patch(`${API}/todos/${id}/complete`);
-      fetchTodos();
+      refresh();
     } catch (err) {
       console.error('Failed to toggle todo:', err);
     }
@@ -91,7 +132,7 @@ export default function App() {
   const deleteTodo = async (id) => {
     try {
       await axios.delete(`${API}/todos/${id}`);
-      fetchTodos();
+      refresh();
     } catch (err) {
       console.error('Failed to delete todo:', err);
     }
@@ -142,22 +183,25 @@ export default function App() {
               <div style={{fontSize: 12, opacity: 0.8, marginTop: 6}}>{completed.length}/{todayTodos.length} 완료</div>
             </div>
 
-            <div style={{fontSize: 12, color: C.muted, marginBottom: 8, fontWeight: 600}}>오늘 할 일</div>
-            {todayTodos.filter(t => !t.completed).map(todo => (
-                <TodoCard key={todo.id} todo={todo} onToggle={toggleComplete} onDelete={deleteTodo}/>
+            <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10}}>
+              <div style={{fontSize: 12, color: C.muted, fontWeight: 600}}>오늘 할 일</div>
+              <button onClick={() => setShowCatManager(true)}
+                      style={{background: 'none', border: `1px solid ${C.border}`, borderRadius: 12, padding: '4px 10px', fontSize: 11, color: C.pinkDark, cursor: 'pointer'}}>
+                🎨 카테고리 관리
+              </button>
+            </div>
+
+            {groups.map(group => (
+                <CategoryGroup key={group.id ?? 'none'} group={group}
+                               onAdd={openForm} onToggle={toggleComplete} onDelete={deleteTodo}/>
             ))}
-            {todayTodos.filter(t => !t.completed).length === 0 && (
+
+            {groups.length === 0 && (
                 <div style={{textAlign: 'center', padding: 30, color: C.muted}}>
                   <div style={{fontSize: 36, marginBottom: 8}}>✨</div>
                   <div>오늘 할 일이 없어요!</div>
                 </div>
             )}
-            {completed.length > 0 && <>
-              <div style={{fontSize: 12, color: C.muted, margin: '16px 0 8px', fontWeight: 600}}>완료 🎉</div>
-              {todayTodos.filter(t => t.completed).map(todo => (
-                  <TodoCard key={todo.id} todo={todo} onToggle={toggleComplete} onDelete={deleteTodo}/>
-              ))}
-            </>}
           </>}
 
           {tab === 'calendar' && <>
@@ -189,8 +233,11 @@ export default function App() {
                      onChange={e => setForm({...form, title: e.target.value})} style={inp}/>
               <input placeholder="메모 (선택)" value={form.memo}
                      onChange={e => setForm({...form, memo: e.target.value})} style={inp}/>
-              <input placeholder="카테고리 (예: 수학, 영어)" value={form.category}
-                     onChange={e => setForm({...form, category: e.target.value})} style={inp}/>
+              <select value={form.categoryId} onChange={e => setForm({...form, categoryId: e.target.value})}
+                      style={{...inp, color: C.text}}>
+                <option value="">카테고리 없음</option>
+                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
               <select value={form.priority} onChange={e => setForm({...form, priority: e.target.value})}
                       style={{...inp, color: C.text}}>
                 <option value="HIGH">🔴 높음</option>
@@ -205,6 +252,11 @@ export default function App() {
                 <button onClick={addTodo} style={{flex: 2, padding: 13, borderRadius: 14, border: 'none', background: `linear-gradient(135deg, ${C.pinkDark}, ${C.lavender})`, color: 'white', fontSize: 14, fontWeight: 700, cursor: 'pointer'}}>추가 ✨</button>
               </div>
             </div>
+        )}
+
+        {/* 카테고리 관리 모달 */}
+        {showCatManager && (
+            <CategoryManager categories={categories} onClose={() => setShowCatManager(false)} onChanged={refresh}/>
         )}
 
         {/* 하단 탭바 */}
@@ -222,17 +274,17 @@ export default function App() {
               {/* 중앙 플러스 추가 버튼 */}
               <div style={{flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center'}}>
                 <button
-                  onClick={() => setShowForm(true)}
-                  style={{
-                    width: 46, height: 46, borderRadius: 23,
-                    background: `linear-gradient(135deg, ${C.pinkDark}, ${C.lavender})`,
-                    color: 'white', fontSize: 26, fontWeight: 700, border: 'none',
-                    cursor: 'pointer', boxShadow: `0 4px 14px rgba(255,92,138,0.4)`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    transform: 'translateY(-6px)', transition: 'all 0.15s ease'
-                  }}
-                  onMouseDown={e => e.currentTarget.style.transform = 'translateY(-3px) scale(0.95)'}
-                  onMouseUp={e => e.currentTarget.style.transform = 'translateY(-6px) scale(1)'}
+                    onClick={() => openForm(null)}
+                    style={{
+                      width: 46, height: 46, borderRadius: 23,
+                      background: `linear-gradient(135deg, ${C.pinkDark}, ${C.lavender})`,
+                      color: 'white', fontSize: 26, fontWeight: 700, border: 'none',
+                      cursor: 'pointer', boxShadow: `0 4px 14px rgba(255,92,138,0.4)`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      transform: 'translateY(-6px)', transition: 'all 0.15s ease'
+                    }}
+                    onMouseDown={e => e.currentTarget.style.transform = 'translateY(-3px) scale(0.95)'}
+                    onMouseUp={e => e.currentTarget.style.transform = 'translateY(-6px) scale(1)'}
                 >
                   +
                 </button>
@@ -252,20 +304,140 @@ export default function App() {
   );
 }
 
-function TodoCard({ todo, onToggle, onDelete, compact }) {
+function TodoCard({ todo, onToggle, onDelete, compact, hideCategory }) {
+  // 체크박스 색: 카테고리 색이 있으면 그 색, 없으면 우선순위 색
+  const accent = todo.categoryColor || PRIORITY_COLOR[todo.priority] || C.pink;
   return (
       <div style={{background: compact ? 'transparent' : C.card, borderRadius: compact ? 0 : 14, padding: compact ? '8px 0' : 14, marginBottom: compact ? 0 : 10, display: 'flex', alignItems: 'center', gap: 10, borderBottom: compact ? `1px solid ${C.border}` : 'none', border: compact ? 'none' : `1px solid ${C.border}`}}>
-        <button onClick={() => onToggle(todo.id)} style={{width: 26, height: 26, borderRadius: 13, border: `2px solid ${PRIORITY_COLOR[todo.priority] || C.pink}`, background: todo.completed ? PRIORITY_COLOR[todo.priority] : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0}}>
+        <button onClick={() => onToggle(todo.id)} style={{width: 26, height: 26, borderRadius: 13, border: `2px solid ${accent}`, background: todo.completed ? accent : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0}}>
           {todo.completed && <span style={{color: 'white', fontSize: 13}}>✓</span>}
         </button>
         <div style={{flex: 1}}>
-          <div style={{fontSize: 14, fontWeight: 500, color: todo.completed ? C.muted : C.text, textDecoration: todo.completed ? 'line-through' : 'none'}}>{todo.title}</div>
+          <div style={{fontSize: 14, fontWeight: 500, color: todo.completed ? C.muted : C.text, textDecoration: todo.completed ? 'line-through' : 'none'}}>
+            {todo.priority && <span style={{display: 'inline-block', width: 6, height: 6, borderRadius: 3, background: PRIORITY_COLOR[todo.priority], marginRight: 6, verticalAlign: 'middle'}}/>}
+            {todo.title}
+          </div>
           {todo.memo && <div style={{fontSize: 11, color: C.muted, marginTop: 2}}>{todo.memo}</div>}
           <div style={{display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap'}}>
-            {todo.category && <span style={{fontSize: 10, color: C.pinkDark, background: '#FFE4F0', padding: '1px 7px', borderRadius: 8}}>{todo.category}</span>}
+            {!hideCategory && todo.category && (
+                <span style={{fontSize: 10, color: todo.categoryColor || C.pinkDark, background: todo.categoryColor ? todo.categoryColor + '22' : '#FFE4F0', padding: '1px 7px', borderRadius: 8}}>
+                  {todo.category}
+                </span>
+            )}
           </div>
         </div>
         <button onClick={() => onDelete(todo.id)} style={{background: 'none', border: 'none', color: C.muted, fontSize: 14, cursor: 'pointer', opacity: 0.5}}>🗑</button>
+      </div>
+  );
+}
+
+// "색깔 알약 헤더 + 아래 할 일 목록" 한 덩어리
+function CategoryGroup({ group, onAdd, onToggle, onDelete }) {
+  const color = group.color || C.pink;
+  return (
+      <div style={{marginBottom: 16}}>
+        <div style={{display: 'inline-flex', alignItems: 'center', gap: 8, background: color + '22', border: `1px solid ${color}55`, borderRadius: 20, padding: '4px 6px 4px 12px', marginBottom: 8}}>
+          <span style={{width: 8, height: 8, borderRadius: 4, background: color}}/>
+          <span style={{fontSize: 13, fontWeight: 700, color}}>{group.name}</span>
+          <button onClick={() => onAdd(group.id)}
+                  style={{width: 22, height: 22, borderRadius: 11, border: 'none', background: color, color: 'white', fontSize: 15, lineHeight: 1, cursor: 'pointer'}}>+</button>
+        </div>
+        {group.todos.map(todo => (
+            <TodoCard key={todo.id} todo={todo} onToggle={onToggle} onDelete={onDelete} hideCategory/>
+        ))}
+      </div>
+  );
+}
+
+// 카테고리 추가 / 이름·색상 변경 / 삭제 모달
+function CategoryManager({ categories, onClose, onChanged }) {
+  const [newName, setNewName] = useState('');
+  const [newColor, setNewColor] = useState(CATEGORY_COLORS[0]);
+  const [error, setError] = useState('');
+
+  // 요청 성공하면 목록 새로고침, 실패하면 서버가 준 에러 메시지 표시
+  const run = async (request) => {
+    try {
+      await request();
+      setError('');
+      onChanged();
+      return true;
+    } catch (err) {
+      setError(errorMessage(err));
+      return false;
+    }
+  };
+
+  const add = async () => {
+    if (!newName.trim()) return;
+    const ok = await run(() => axios.post(`${API}/categories`, { name: newName.trim(), color: newColor }));
+    if (ok) setNewName('');
+  };
+
+  const save = (id, name, color) =>
+      run(() => axios.put(`${API}/categories/${id}`, { name: name.trim(), color }));
+
+  const remove = (id) => {
+    if (!window.confirm('이 카테고리를 삭제할까요?\n안의 할 일은 삭제되지 않고 "미분류"로 이동해요.')) return;
+    run(() => axios.delete(`${API}/categories/${id}`));
+  };
+
+  return (
+      <div onClick={onClose} style={{position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.35)', zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center'}}>
+        <div onClick={e => e.stopPropagation()} style={{width: '100%', maxWidth: 480, maxHeight: '80vh', overflowY: 'auto', background: C.white, borderRadius: '24px 24px 0 0', padding: '16px 24px 32px', boxSizing: 'border-box'}}>
+          <div style={{width: 36, height: 4, background: C.border, borderRadius: 2, margin: '0 auto 16px'}}/>
+          <div style={{fontSize: 15, fontWeight: 700, color: C.pink, marginBottom: 14}}>🎨 카테고리 관리</div>
+
+          {categories.length === 0 && (
+              <div style={{fontSize: 13, color: C.muted, marginBottom: 12}}>아직 카테고리가 없어요. 아래에서 만들어 보세요!</div>
+          )}
+          {categories.map(c => (
+              <CategoryRow key={`${c.id}-${c.name}-${c.color}`} category={c} onSave={save} onRemove={remove}/>
+          ))}
+
+          <div style={{borderTop: `1px solid ${C.border}`, margin: '16px 0 12px'}}/>
+          <div style={{fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 8}}>새 카테고리</div>
+          <div style={{display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10}}>
+            {CATEGORY_COLORS.map(col => (
+                <button key={col} onClick={() => setNewColor(col)}
+                        style={{width: 26, height: 26, borderRadius: 13, background: col, cursor: 'pointer', border: newColor === col ? `3px solid ${C.text}` : '3px solid transparent'}}/>
+            ))}
+            <input type="color" value={newColor} onChange={e => setNewColor(e.target.value)}
+                   style={{width: 30, height: 30, border: 'none', padding: 0, background: 'none', cursor: 'pointer'}}/>
+          </div>
+          <div style={{display: 'flex', gap: 8}}>
+            <input placeholder="카테고리 이름" value={newName} maxLength={30}
+                   onChange={e => setNewName(e.target.value)}
+                   style={{...inp, marginBottom: 0, flex: 1, width: 'auto', minWidth: 0}}/>
+            <button onClick={add}
+                    style={{padding: '0 18px', borderRadius: 12, border: 'none', background: `linear-gradient(135deg, ${C.pinkDark}, ${C.lavender})`, color: 'white', fontWeight: 700, cursor: 'pointer'}}>추가</button>
+          </div>
+
+          {error && <div style={{color: '#FF5252', fontSize: 12, marginTop: 10}}>⚠️ {error}</div>}
+
+          <button onClick={onClose}
+                  style={{width: '100%', marginTop: 18, padding: 13, borderRadius: 14, border: `1px solid ${C.border}`, background: 'white', fontSize: 14, color: C.muted, cursor: 'pointer'}}>닫기</button>
+        </div>
+      </div>
+  );
+}
+
+// 카테고리 한 줄: 색상 선택 + 이름 수정 + 저장 + 삭제
+function CategoryRow({ category, onSave, onRemove }) {
+  const [name, setName] = useState(category.name);
+  const [color, setColor] = useState(category.color);
+  const changed = name !== category.name || color.toLowerCase() !== category.color.toLowerCase();
+
+  return (
+      <div style={{display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8}}>
+        <input type="color" value={color} onChange={e => setColor(e.target.value)}
+               style={{width: 36, height: 36, border: 'none', padding: 0, background: 'none', cursor: 'pointer', flexShrink: 0}}/>
+        <input value={name} maxLength={30} onChange={e => setName(e.target.value)}
+               style={{...inp, marginBottom: 0, flex: 1, width: 'auto', minWidth: 0}}/>
+        <button disabled={!changed} onClick={() => onSave(category.id, name, color)}
+                style={{padding: '8px 12px', borderRadius: 10, border: 'none', background: changed ? C.pinkDark : C.border, color: changed ? 'white' : C.muted, fontSize: 12, fontWeight: 700, cursor: changed ? 'pointer' : 'default'}}>저장</button>
+        <button onClick={() => onRemove(category.id)}
+                style={{background: 'none', border: 'none', color: C.muted, fontSize: 15, cursor: 'pointer', opacity: 0.6}}>🗑</button>
       </div>
   );
 }
@@ -458,31 +630,31 @@ function MemoTab() {
                 {images.map(img => {
                   const src = getImageUrl(img);
                   return (
-                    <div 
-                      key={img.id} 
-                      onClick={(e) => { 
-                        const activeSrc = e.currentTarget.querySelector('img')?.src || src;
-                        setPreviewUrl({ url: activeSrc, fallbackUrl: img.fallbackUrl }); 
-                        setZoomScale(1); 
-                      }}
-                      style={{position: 'relative', borderRadius: 10, overflow: 'hidden', aspectRatio: '1', cursor: 'pointer'}}
-                    >
-                      <img src={src} alt={img.originalName || '사진'}
-                           onError={(e) => {
-                             if (img.fallbackUrl && e.currentTarget.src !== img.fallbackUrl) {
-                               e.currentTarget.src = img.fallbackUrl;
-                             }
-                           }}
-                           style={{width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.2s ease'}}
-                           onMouseOver={e => e.currentTarget.style.transform = 'scale(1.05)'}
-                           onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}/>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); deleteImage(img.id); }} 
-                        style={{position: 'absolute', top: 4, right: 4, background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: 10, color: 'white', fontSize: 11, cursor: 'pointer', padding: '2px 6px'}}
+                      <div
+                          key={img.id}
+                          onClick={(e) => {
+                            const activeSrc = e.currentTarget.querySelector('img')?.src || src;
+                            setPreviewUrl({ url: activeSrc, fallbackUrl: img.fallbackUrl });
+                            setZoomScale(1);
+                          }}
+                          style={{position: 'relative', borderRadius: 10, overflow: 'hidden', aspectRatio: '1', cursor: 'pointer'}}
                       >
-                        ✕
-                      </button>
-                    </div>
+                        <img src={src} alt={img.originalName || '사진'}
+                             onError={(e) => {
+                               if (img.fallbackUrl && e.currentTarget.src !== img.fallbackUrl) {
+                                 e.currentTarget.src = img.fallbackUrl;
+                               }
+                             }}
+                             style={{width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.2s ease'}}
+                             onMouseOver={e => e.currentTarget.style.transform = 'scale(1.05)'}
+                             onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}/>
+                        <button
+                            onClick={(e) => { e.stopPropagation(); deleteImage(img.id); }}
+                            style={{position: 'absolute', top: 4, right: 4, background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: 10, color: 'white', fontSize: 11, cursor: 'pointer', padding: '2px 6px'}}
+                        >
+                          ✕
+                        </button>
+                      </div>
                   );
                 })}
               </div>
@@ -490,56 +662,56 @@ function MemoTab() {
 
           {/* 이미지 확대 라이트박스 모달 */}
           {previewUrl && (
-            <div 
-              onClick={closeLightbox} 
-              style={{
-                position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                background: 'rgba(0, 0, 0, 0.85)',
-                backdropFilter: 'blur(8px)',
-                WebkitBackdropFilter: 'blur(8px)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                zIndex: 1000, padding: 20
-              }}
-            >
-              <div style={{ position: 'relative', maxWidth: '100%', maxHeight: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <button 
-                  onClick={closeLightbox} 
+              <div
+                  onClick={closeLightbox}
                   style={{
-                    position: 'absolute', top: -48, right: 0,
-                    background: 'rgba(255, 255, 255, 0.25)', border: 'none',
-                    borderRadius: 18, color: 'white', width: 36, height: 36,
-                    fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    backdropFilter: 'blur(4px)'
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0, 0, 0, 0.85)',
+                    backdropFilter: 'blur(8px)',
+                    WebkitBackdropFilter: 'blur(8px)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    zIndex: 1000, padding: 20
                   }}
-                >
-                  ✕
-                </button>
-                <img 
-                  src={typeof previewUrl === 'object' ? previewUrl.url : previewUrl} 
-                  alt="확대 이미지"
-                  onError={(e) => {
-                    if (typeof previewUrl === 'object' && previewUrl.fallbackUrl && e.currentTarget.src !== previewUrl.fallbackUrl) {
-                      e.currentTarget.src = previewUrl.fallbackUrl;
-                    }
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setZoomScale(prev => prev === 1 ? 1.5 : 1);
-                  }}
-                  style={{
-                    maxHeight: '80vh', maxWidth: '90vw', borderRadius: 16,
-                    objectFit: 'contain',
-                    boxShadow: '0 20px 50px rgba(0,0,0,0.6)',
-                    transform: `scale(${zoomScale})`,
-                    transition: 'transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-                    cursor: zoomScale === 1 ? 'zoom-in' : 'zoom-out'
-                  }}
-                />
-                <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, marginTop: 14, fontWeight: 500 }}>
-                  🔍 이미지를 클릭하면 확대/축소됩니다 • 바깥을 누르면 닫힙니다
+              >
+                <div style={{ position: 'relative', maxWidth: '100%', maxHeight: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <button
+                      onClick={closeLightbox}
+                      style={{
+                        position: 'absolute', top: -48, right: 0,
+                        background: 'rgba(255, 255, 255, 0.25)', border: 'none',
+                        borderRadius: 18, color: 'white', width: 36, height: 36,
+                        fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        backdropFilter: 'blur(4px)'
+                      }}
+                  >
+                    ✕
+                  </button>
+                  <img
+                      src={typeof previewUrl === 'object' ? previewUrl.url : previewUrl}
+                      alt="확대 이미지"
+                      onError={(e) => {
+                        if (typeof previewUrl === 'object' && previewUrl.fallbackUrl && e.currentTarget.src !== previewUrl.fallbackUrl) {
+                          e.currentTarget.src = previewUrl.fallbackUrl;
+                        }
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setZoomScale(prev => prev === 1 ? 1.5 : 1);
+                      }}
+                      style={{
+                        maxHeight: '80vh', maxWidth: '90vw', borderRadius: 16,
+                        objectFit: 'contain',
+                        boxShadow: '0 20px 50px rgba(0,0,0,0.6)',
+                        transform: `scale(${zoomScale})`,
+                        transition: 'transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                        cursor: zoomScale === 1 ? 'zoom-in' : 'zoom-out'
+                      }}
+                  />
+                  <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, marginTop: 14, fontWeight: 500 }}>
+                    🔍 이미지를 클릭하면 확대/축소됩니다 • 바깥을 누르면 닫힙니다
+                  </div>
                 </div>
               </div>
-            </div>
           )}
         </div>
     );
@@ -794,78 +966,81 @@ function AuthScreen({ onLogin }) {
   };
 
   return (
-    <div style={{
-      background: 'linear-gradient(160deg, #FFF0F5 0%, #F0E4FF 100%)', 
-      minHeight: '100vh', maxWidth: 480, margin: '0 auto',
-      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      padding: 24, boxSizing: 'border-box', fontFamily: '-apple-system, sans-serif'
-    }}>
-      <div style={{ 
-        background: C.card, borderRadius: 28, padding: '36px 24px', width: '100%', 
-        boxSizing: 'border-box', boxShadow: '0 10px 30px rgba(255,143,171,0.2)', 
-        border: `1px solid ${C.border}`, textAlign: 'center' 
+      <div style={{
+        background: 'linear-gradient(160deg, #FFF0F5 0%, #F0E4FF 100%)',
+        minHeight: '100vh', maxWidth: 480, margin: '0 auto',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        padding: 24, boxSizing: 'border-box', fontFamily: '-apple-system, sans-serif'
       }}>
-        <div style={{ fontSize: 44, marginBottom: 8 }}>🐈‍⬛</div>
-        <div style={{ fontSize: 10, color: C.pinkDark, letterSpacing: 2, fontWeight: 700, marginBottom: 4 }}>PRIVATE STUDY PLANNER</div>
-        <div style={{ fontSize: 26, fontWeight: 800, background: `linear-gradient(135deg, ${C.pinkDark}, ${C.lavender})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', marginBottom: 6 }}>Todi</div>
-        <div style={{ fontSize: 13, color: C.muted, marginBottom: 24 }}>소수 지인 전용 비밀 공간 🐾</div>
+        <div style={{
+          background: C.card, borderRadius: 28, padding: '36px 24px', width: '100%',
+          boxSizing: 'border-box', boxShadow: '0 10px 30px rgba(255,143,171,0.2)',
+          border: `1px solid ${C.border}`, textAlign: 'center'
+        }}>
+          <div style={{ fontSize: 44, marginBottom: 8 }}>🐈‍⬛</div>
+          <div style={{ fontSize: 10, color: C.pinkDark, letterSpacing: 2, fontWeight: 700, marginBottom: 4 }}>PRIVATE STUDY PLANNER</div>
+          <div style={{ fontSize: 26, fontWeight: 800, background: `linear-gradient(135deg, ${C.pinkDark}, ${C.lavender})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', marginBottom: 6 }}>Todi</div>
+          <div style={{ fontSize: 13, color: C.muted, marginBottom: 24 }}>소수 지인 전용 비밀 공간 🐾</div>
 
-        <div style={{ display: 'flex', background: '#FFF0F5', borderRadius: 14, padding: 4, marginBottom: 20 }}>
-          <button 
-            type="button"
-            onClick={() => { setMode('login'); setError(''); }} 
-            style={{ 
-              flex: 1, padding: '10px 0', border: 'none', borderRadius: 10, 
-              background: mode === 'login' ? 'white' : 'transparent', 
-              color: mode === 'login' ? C.pinkDark : C.muted, 
-              fontWeight: mode === 'login' ? 700 : 400, cursor: 'pointer', fontSize: 14, 
-              boxShadow: mode === 'login' ? '0 2px 8px rgba(0,0,0,0.05)' : 'none' 
-            }}>
-            로그인
-          </button>
-          <button 
-            type="button"
-            onClick={() => { setMode('signup'); setError(''); }} 
-            style={{ 
-              flex: 1, padding: '10px 0', border: 'none', borderRadius: 10, 
-              background: mode === 'signup' ? 'white' : 'transparent', 
-              color: mode === 'signup' ? C.pinkDark : C.muted, 
-              fontWeight: mode === 'signup' ? 700 : 400, cursor: 'pointer', fontSize: 14, 
-              boxShadow: mode === 'signup' ? '0 2px 8px rgba(0,0,0,0.05)' : 'none' 
-            }}>
-            회원가입
-          </button>
+          <div style={{ display: 'flex', background: '#FFF0F5', borderRadius: 14, padding: 4, marginBottom: 20 }}>
+            <button
+                type="button"
+                onClick={() => { setMode('login'); setError(''); }}
+                style={{
+                  flex: 1, padding: '10px 0', border: 'none', borderRadius: 10,
+                  background: mode === 'login' ? 'white' : 'transparent',
+                  color: mode === 'login' ? C.pinkDark : C.muted,
+                  fontWeight: mode === 'login' ? 700 : 400, cursor: 'pointer', fontSize: 14,
+                  boxShadow: mode === 'login' ? '0 2px 8px rgba(0,0,0,0.05)' : 'none'
+                }}>
+              로그인
+            </button>
+            <button
+                type="button"
+                onClick={() => { setMode('signup'); setError(''); }}
+                style={{
+                  flex: 1, padding: '10px 0', border: 'none', borderRadius: 10,
+                  background: mode === 'signup' ? 'white' : 'transparent',
+                  color: mode === 'signup' ? C.pinkDark : C.muted,
+                  fontWeight: mode === 'signup' ? 700 : 400, cursor: 'pointer', fontSize: 14,
+                  boxShadow: mode === 'signup' ? '0 2px 8px rgba(0,0,0,0.05)' : 'none'
+                }}>
+              회원가입
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit}>
+            <input
+                placeholder="닉네임 (예: 홍길동)"
+                value={nickname}
+                onChange={e => setNickname(e.target.value)}
+                style={{ ...inp, marginBottom: 12 }}
+            />
+            <input
+                type="password"
+                placeholder="비밀번호"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                style={{ ...inp, marginBottom: 16 }}
+            />
+
+            {error && <div style={{ color: '#FF5252', fontSize: 12, marginBottom: 14, fontWeight: 500 }}>⚠️ {error}</div>}
+
+            <button
+                type="submit"
+                style={{
+                  width: '100%', padding: '14px', borderRadius: 14, border: 'none',
+                  background: `linear-gradient(135deg, ${C.pinkDark}, ${C.lavender})`,
+                  color: 'white', fontSize: 15, fontWeight: 700, cursor: 'pointer',
+                  boxShadow: '0 4px 16px rgba(255,92,138,0.3)'
+                }}>
+              {mode === 'login' ? '로그인하기 ✨' : '가입하고 시작하기 ✨'}
+            </button>
+          </form>
         </div>
-
-        <form onSubmit={handleSubmit}>
-          <input 
-            placeholder="닉네임 (예: 홍길동)" 
-            value={nickname} 
-            onChange={e => setNickname(e.target.value)}
-            style={{ ...inp, marginBottom: 12 }} 
-          />
-          <input 
-            type="password" 
-            placeholder="비밀번호" 
-            value={password} 
-            onChange={e => setPassword(e.target.value)}
-            style={{ ...inp, marginBottom: 16 }} 
-          />
-
-          {error && <div style={{ color: '#FF5252', fontSize: 12, marginBottom: 14, fontWeight: 500 }}>⚠️ {error}</div>}
-
-          <button 
-            type="submit" 
-            style={{ 
-              width: '100%', padding: '14px', borderRadius: 14, border: 'none', 
-              background: `linear-gradient(135deg, ${C.pinkDark}, ${C.lavender})`, 
-              color: 'white', fontSize: 15, fontWeight: 700, cursor: 'pointer', 
-              boxShadow: '0 4px 16px rgba(255,92,138,0.3)' 
-            }}>
-            {mode === 'login' ? '로그인하기 ✨' : '가입하고 시작하기 ✨'}
-          </button>
-        </form>
       </div>
-    </div>
   );
 }
+
+
+
