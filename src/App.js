@@ -181,6 +181,7 @@ export default function App() {
   const [tab, setTab] = useState('home');
   const [todos, setTodos] = useState([]);
   const [routineCompletions, setRoutineCompletions] = useState([]);  // [{todoId, date}] - 루틴 할 일의 날짜별 완료 기록
+  const [routineExclusions, setRoutineExclusions] = useState([]);  // [{todoId, date}] - 루틴 할 일을 "그 날짜만" 삭제한 기록
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);   // null이면 새 할 일 추가, 값 있으면 그 id를 수정 중
   const [form, setForm] = useState(defaultForm);
@@ -191,6 +192,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showPlusMenu, setShowPlusMenu] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
+  const [deleteChoice, setDeleteChoice] = useState(null);  // 루틴 할 일 삭제 시 {id, title} - "이 날짜만" vs "전체" 선택 모달
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [showCategoryFilterMenu, setShowCategoryFilterMenu] = useState(false);
   const [calendarCategoryFilter, setCalendarCategoryFilter] = useState('ALL');
@@ -220,6 +222,19 @@ export default function App() {
   const isRoutineDoneOn = (todoId, date) =>
       routineCompletions.some(c => c.todoId === todoId && c.date === date);
 
+  const fetchRoutineExclusions = async () => {
+    try {
+      const res = await axios.get(`${API}/todos/routine-exclusions`);
+      setRoutineExclusions(res.data);
+    } catch (err) {
+      console.error('Failed to fetch routine exclusions:', err);
+    }
+  };
+
+  // 루틴 할 일 하나가 특정 날짜에 "그 날짜만 삭제"로 제외됐는지
+  const isRoutineExcludedOn = (todoId, date) =>
+      routineExclusions.some(e => e.todoId === todoId && e.date === date);
+
   const fetchGroups = async (date) => {
     try {
       const res = await axios.get(`${API}/categories/grouped`, { params: { date } });
@@ -233,6 +248,7 @@ export default function App() {
     fetchTodos();
     fetchGroups(selectedDate);
     fetchRoutineCompletions();
+    fetchRoutineExclusions();
   };
 
   useEffect(() => {
@@ -427,7 +443,13 @@ export default function App() {
     }
   };
 
-  const deleteTodo = async (id) => {
+  // 할 일 삭제. 루틴 할 일이면 바로 안 지우고, "이 날짜만" / "전체" 중 고를 수 있게 선택 모달을 띄움
+  const deleteTodo = async (todo) => {
+    if (todo && typeof todo === 'object' && todo.isRoutine) {
+      setDeleteChoice({ id: todo.id, title: todo.title });
+      return;
+    }
+    const id = (todo && typeof todo === 'object') ? todo.id : todo;
     try {
       await axios.delete(`${API}/todos/${id}`);
       refresh();
@@ -436,12 +458,38 @@ export default function App() {
     }
   };
 
+  // 루틴 할 일을 "이 날짜만" 삭제 (다른 날짜엔 그대로 남음)
+  const deleteRoutineOccurrence = async () => {
+    if (!deleteChoice) return;
+    try {
+      await axios.delete(`${API}/todos/${deleteChoice.id}`, { params: { date: selectedDate } });
+      refresh();
+    } catch (err) {
+      console.error('Failed to delete routine occurrence:', err);
+    } finally {
+      setDeleteChoice(null);
+    }
+  };
+
+  // 루틴 할 일을 전체(모든 날짜) 삭제
+  const deleteRoutineAll = async () => {
+    if (!deleteChoice) return;
+    try {
+      await axios.delete(`${API}/todos/${deleteChoice.id}`);
+      refresh();
+    } catch (err) {
+      console.error('Failed to delete routine entirely:', err);
+    } finally {
+      setDeleteChoice(null);
+    }
+  };
+
   const todayStr = getLocalDateStr();
   const isToday = selectedDate === todayStr;
   // 선택한 날짜의 할 일: 그 날짜에 정확히 등록된 할 일 + 시작일이 지난 루틴 할 일(완료 여부는 그 날짜 기준)
   const selectedTodos = [
     ...todos.filter(t => !t.isRoutine && t.dueDate === selectedDate),
-    ...todos.filter(t => t.isRoutine && t.dueDate <= selectedDate)
+    ...todos.filter(t => t.isRoutine && t.dueDate <= selectedDate && !isRoutineExcludedOn(t.id, selectedDate))
         .map(t => ({...t, completed: isRoutineDoneOn(t.id, selectedDate)})),
   ];
 
@@ -571,7 +619,7 @@ export default function App() {
           </>}
 
           {tab === 'calendar' && <>
-            <CalendarView selectedDate={selectedDate} onSelect={setSelectedDate} todos={todos}/>
+            <CalendarView selectedDate={selectedDate} onSelect={setSelectedDate} todos={todos} exclusions={routineExclusions}/>
             <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '12px 0 8px', gap: 8}}>
               <div style={{fontSize: 12, color: C.muted, fontWeight: 600, flexShrink: 0}}>
                 {isToday ? '오늘' : formatDateShort(selectedDate)} 할 일
@@ -678,6 +726,16 @@ export default function App() {
             <RoutineManager onClose={() => setShowRoutines(false)}/>
         )}
 
+        {/* 루틴 할 일 삭제 선택 모달: 이 날짜만 vs 전체 */}
+        {deleteChoice && (
+            <DeleteRoutineChoiceModal
+                title={deleteChoice.title}
+                dateLabel={selectedDate}
+                onDeleteOccurrence={deleteRoutineOccurrence}
+                onDeleteAll={deleteRoutineAll}
+                onCancel={() => setDeleteChoice(null)}/>
+        )}
+
         {/* 설정 모달 */}
         {showSettings && (
             <SettingsModal user={user} onClose={() => setShowSettings(false)} onLogout={handleLogout} onWithdraw={handleWithdrawn} onNicknameChanged={handleNicknameChanged} onStatusMessageChanged={handleStatusMessageChanged} onAvatarChanged={handleAvatarChanged} onAvatarSizeChanged={handleAvatarSizeChanged} onPhotoChanged={handlePhotoChanged} onPhotoRemoved={handlePhotoRemoved}/>
@@ -782,7 +840,7 @@ function TodoCard({ todo, onToggle, onDelete, onEdit, compact, hideCategory }) {
             )}
           </div>
         </div>
-        <button onClick={(e) => { e.stopPropagation(); onDelete(todo.id); }} style={{background: 'none', border: 'none', color: C.muted, cursor: 'pointer', opacity: 0.5, display: 'flex'}}><Icon name="trash" size={15}/></button>
+        <button onClick={(e) => { e.stopPropagation(); onDelete(todo); }} style={{background: 'none', border: 'none', color: C.muted, cursor: 'pointer', opacity: 0.5, display: 'flex'}}><Icon name="trash" size={15}/></button>
       </div>
   );
 }
@@ -1203,6 +1261,34 @@ function SettingsModal({ user, onClose, onLogout, onWithdraw, onNicknameChanged,
 
 // 루틴(반복 일정)으로 표시된 할 일을 날짜 상관없이 한 눈에 모아보는 모달.
 // 체크박스는 "오늘" 완료했는지를 보여주고 토글함 (루틴은 날짜별로 완료 여부가 따로 저장되니까)
+// 루틴 할 일 삭제할 때 "이 날짜만" vs "전체(모든 날짜)" 고르는 모달
+function DeleteRoutineChoiceModal({ title, dateLabel, onDeleteOccurrence, onDeleteAll, onCancel }) {
+  return (
+      <div onClick={onCancel} style={{position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.35)', zIndex: 300, display: 'flex', alignItems: 'flex-end', justifyContent: 'center'}}>
+        <div onClick={e => e.stopPropagation()} style={{width: '100%', maxWidth: 480, background: C.white, borderRadius: '24px 24px 0 0', padding: '16px 24px 28px', boxSizing: 'border-box'}}>
+          <div style={{width: 36, height: 4, background: C.border, borderRadius: 2, margin: '0 auto 16px'}}/>
+          <div style={{display: 'flex', alignItems: 'center', gap: 6, fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 4}}><Icon name="trash" size={15} color={C.muted}/> 할 일 삭제</div>
+          <div style={{fontSize: 13, color: C.muted, marginBottom: 18}}>"{title}"은(는) 루틴 할 일이에요. 어떻게 지울까요?</div>
+
+          <button onClick={onDeleteOccurrence}
+                  style={{width: '100%', padding: 14, borderRadius: 14, border: `1px solid ${C.border}`, background: 'white', fontSize: 14, fontWeight: 700, color: C.text, cursor: 'pointer', marginBottom: 8, textAlign: 'left'}}>
+            {dateLabel} 날짜만 삭제
+            <div style={{fontSize: 11, fontWeight: 400, color: C.muted, marginTop: 2}}>다른 날짜엔 계속 반복해서 떠요</div>
+          </button>
+
+          <button onClick={onDeleteAll}
+                  style={{width: '100%', padding: 14, borderRadius: 14, border: 'none', background: '#FFEAEA', fontSize: 14, fontWeight: 700, color: '#FF5252', cursor: 'pointer', marginBottom: 8, textAlign: 'left'}}>
+            전체 삭제 (모든 날짜)
+            <div style={{fontSize: 11, fontWeight: 400, color: '#FF5252', opacity: 0.8, marginTop: 2}}>이 루틴 자체가 없어져요. 되돌릴 수 없어요</div>
+          </button>
+
+          <button onClick={onCancel}
+                  style={{width: '100%', padding: 13, borderRadius: 14, border: `1px solid ${C.border}`, background: 'white', fontSize: 14, color: C.muted, cursor: 'pointer'}}>취소</button>
+        </div>
+      </div>
+  );
+}
+
 function RoutineManager({ onClose }) {
   const [routines, setRoutines] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1236,7 +1322,10 @@ function RoutineManager({ onClose }) {
     }
   };
 
-  const remove = async (id) => {
+  // 여기(루틴 모아보기)에서 지우는 건 전체 삭제. 날짜별로 지우고 싶으면 홈/캘린더 탭에서 지워야 함
+  const remove = async (todo) => {
+    const id = (todo && typeof todo === 'object') ? todo.id : todo;
+    if (!window.confirm('이 루틴을 전체(모든 날짜) 삭제할까요?')) return;
     try {
       await axios.delete(`${API}/todos/${id}`);
       fetchRoutines();
@@ -1782,7 +1871,7 @@ const HOLIDAYS_KR = {
 const HOLIDAY_RED = '#FF5252';
 const SATURDAY_BLUE = '#4C7EFF';
 
-function CalendarView({ selectedDate, onSelect, todos }) {
+function CalendarView({ selectedDate, onSelect, todos, exclusions }) {
   const [current, setCurrent] = useState(new Date());
   const year = current.getFullYear();
   const month = current.getMonth();
@@ -1792,7 +1881,10 @@ function CalendarView({ selectedDate, onSelect, todos }) {
 
   const hasTodo = (day) => {
     const d = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-    return todos.some(t => t.dueDate === d || (t.isRoutine && t.dueDate <= d));
+    return todos.some(t =>
+        (!t.isRoutine && t.dueDate === d) ||
+        (t.isRoutine && t.dueDate <= d && !(exclusions || []).some(e => e.todoId === t.id && e.date === d))
+    );
   };
 
   const selectDay = (day) => {
