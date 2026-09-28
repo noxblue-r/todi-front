@@ -1096,6 +1096,10 @@ function SettingsModal({ user, onClose, onLogout, onWithdraw, onProfileSaved }) 
         const res = await axios.patch(`${API}/account/nickname`, { newNickname: trimmedName });
         latestNickname = res.data.nickname;
         latestToken = res.data.token;
+        // 새 토큰을 여기서 바로 반영해야 함. 안 그러면 바로 다음에 이어지는 사진 업로드/프로필 저장 요청이
+        // 아직 로컬에 남아있는 "예전 닉네임" 토큰으로 인증되면서, 서버가 방금 바꾼 닉네임을 못 찾아
+        // 자동복구 로직으로 도로 되돌려버리고(닉네임 롤백) 사진도 예전 닉네임 밑에 저장되는 버그가 있었음
+        localStorage.setItem('todi_token', latestToken);
       }
 
       let photoVersion = user.avatarPhotoVersion;
