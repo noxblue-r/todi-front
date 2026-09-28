@@ -3,7 +3,7 @@ import axios from 'axios';
 
 const API = process.env.REACT_APP_API_URL || 'https://todi-production-6cad.up.railway.app/api';
 
-// 로그인한 사용자의 닉네임 (없으면 빈 문자열)
+// 로그인한 사용자의 닉네임 (없으면 빈 문자열). <img src>에 ?nickname= 쿼리로 붙일 때만 사용
 const getNickname = () => {
   try {
     const saved = JSON.parse(localStorage.getItem('todi_user'));
@@ -13,12 +13,14 @@ const getNickname = () => {
   }
 };
 
-// 모든 API 요청에 닉네임 헤더를 자동으로 붙임 (서버가 이 닉네임의 데이터만 돌려줘).
-// 한글은 HTTP 헤더에 그대로 못 넣어서 encodeURIComponent로 인코딩해서 보냄
+const getToken = () => localStorage.getItem('todi_token') || '';
+
+// 모든 API 요청에 로그인 토큰을 자동으로 붙임. 서버가 토큰을 검증해서 진짜 주인이 누군지 판단하므로
+// (예전처럼 닉네임을 그냥 헤더에 적어서 보내는 방식은 아무나 남의 닉네임을 흉내낼 수 있어서 위험했음)
 axios.interceptors.request.use((config) => {
-  const nickname = getNickname();
-  if (nickname) {
-    config.headers['X-Nickname'] = encodeURIComponent(nickname);
+  const token = getToken();
+  if (token) {
+    config.headers['Authorization'] = `Bearer ${token}`;
   }
   return config;
 });
@@ -41,6 +43,95 @@ const PRIORITY_COLOR = { HIGH: '#FF5C8A', MEDIUM: '#FFD93D', LOW: '#A8E6CF' };
 // 카테고리 기본 색상 팔레트 (새 카테고리 만들 때 고르는 색)
 const CATEGORY_COLORS = ['#FF8FAB', '#C9A7FF', '#7FB5FF', '#7ED6B0', '#FFD93D', '#FFA96B'];
 
+// 심플한 라인(아웃라인) 아이콘 세트. 이모지 대신 통일된 톤의 SVG 아이콘으로 사용
+function Icon({ name, size = 20, color = 'currentColor', strokeWidth = 1.8 }) {
+  const s = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: color, strokeWidth, strokeLinecap: 'round', strokeLinejoin: 'round', display: 'block' };
+  switch (name) {
+    case 'home':
+      return (<svg style={s} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9a1 1 0 0 0 1 1H9a1 1 0 0 0 1-1v-4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v4a1 1 0 0 0 1 1h2.5a1 1 0 0 0 1-1v-9"/></svg>);
+    case 'calendar':
+      return (<svg style={s} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"><rect x="3.5" y="5" width="17" height="16" rx="2.5"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg>);
+    case 'timer':
+      return (<svg style={s} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/></svg>);
+    case 'note':
+      return (<svg style={s} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"><path d="M6 3h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M14 3v5h5M8 12h8M8 16h5"/></svg>);
+    case 'settings':
+      return (<svg style={s} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+        <g transform="translate(4.56 4.56) scale(0.62)">
+          <circle cx="12" cy="12" r="5.3" fill="none" stroke={color} strokeWidth={strokeWidth / 0.62}/>
+          <rect x="10.2" y="1" width="3.6" height="6" rx="1.8" fill={color} stroke="none"/>
+          <rect x="10.2" y="1" width="3.6" height="6" rx="1.8" fill={color} stroke="none" transform="rotate(60 12 12)"/>
+          <rect x="10.2" y="1" width="3.6" height="6" rx="1.8" fill={color} stroke="none" transform="rotate(120 12 12)"/>
+          <rect x="10.2" y="1" width="3.6" height="6" rx="1.8" fill={color} stroke="none" transform="rotate(180 12 12)"/>
+          <rect x="10.2" y="1" width="3.6" height="6" rx="1.8" fill={color} stroke="none" transform="rotate(240 12 12)"/>
+          <rect x="10.2" y="1" width="3.6" height="6" rx="1.8" fill={color} stroke="none" transform="rotate(300 12 12)"/>
+        </g>
+        <g transform="translate(15.6 0.3) scale(0.52)" fill="none" stroke={color} strokeWidth={strokeWidth / 0.52} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M8 15C8 15 2 10.5 2 6.5C2 4 4 2.5 6.2 2.5C7.4 2.5 8 3.6 8 3.6C8 3.6 8.6 2.5 9.8 2.5C12 2.5 14 4 14 6.5C14 10.5 8 15 8 15Z"/>
+        </g>
+      </svg>);
+    case 'repeat':
+      return (<svg style={s} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"><path d="M17 2.5 20.5 6 17 9.5"/><path d="M3.5 12V9a3 3 0 0 1 3-3h14"/><path d="M7 21.5 3.5 18 7 14.5"/><path d="M20.5 12v3a3 3 0 0 1-3 3h-14"/></svg>);
+    case 'palette':
+      return (<svg style={s} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a9 9 0 1 0 0 18h1.5a2 2 0 0 0 2-2 1.7 1.7 0 0 0-.5-1.2 1.7 1.7 0 0 1-.5-1.2 1.8 1.8 0 0 1 1.8-1.8H18a3 3 0 0 0 3-3 9.1 9.1 0 0 0-9-8.8Z"/><circle cx="7.5" cy="12" r="1.1" fill={color} stroke="none"/><circle cx="9" cy="8" r="1.1" fill={color} stroke="none"/><circle cx="14" cy="7.5" r="1.1" fill={color} stroke="none"/><circle cx="16.5" cy="11" r="1.1" fill={color} stroke="none"/></svg>);
+    case 'trash':
+      return (<svg style={s} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"><path d="M4 7h16M9.5 7V4.5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1V7M18.5 7l-.8 12.5a2 2 0 0 1-2 1.9H8.3a2 2 0 0 1-2-1.9L5.5 7"/><path d="M10 11v6M14 11v6"/></svg>);
+    case 'camera':
+      return (<svg style={s} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"><path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2l1-2h7l1 2h2A1.5 1.5 0 0 1 20 8.5v9A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5v-9Z"/><circle cx="12" cy="13" r="3.3"/></svg>);
+    case 'search':
+      return (<svg style={s} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.8-4.8"/></svg>);
+    case 'logout':
+      return (<svg style={s} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>);
+    case 'edit':
+      return (<svg style={s} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"><path d="M12.5 5.5 18.5 11.5 8 22H2v-6Z"/><path d="m15.5 2.5 6 6"/></svg>);
+    case 'alert':
+      return (<svg style={s} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"><path d="M12 3 2 20h20L12 3Z"/><path d="M12 10v4M12 17h.01"/></svg>);
+    case 'award':
+      return (<svg style={s} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8 12.3 2.6 2.6L16.2 9"/></svg>);
+    case 'paw':
+      return (<svg style={s} viewBox="0 0 24 24" fill={color} stroke="none"><ellipse cx="12" cy="16.3" rx="5.2" ry="4.2"/><circle cx="5.3" cy="9.6" r="2.1"/><circle cx="9.8" cy="5.6" r="2.1"/><circle cx="14.2" cy="5.6" r="2.1"/><circle cx="18.7" cy="9.6" r="2.1"/></svg>);
+    case 'target':
+      return (<svg style={s} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill={color} stroke="none"/></svg>);
+    case 'coffee':
+      return (<svg style={s} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"><path d="M4 9h13v6a4.5 4.5 0 0 1-4.5 4.5h-4A4.5 4.5 0 0 1 4 15V9Z"/><path d="M17 10.5h1.5a2.5 2.5 0 0 1 0 5H17"/><path d="M8 3c-.5 1 .5 1.3 0 2.5M12 3c-.5 1 .5 1.3 0 2.5"/></svg>);
+    case 'book':
+      return (<svg style={s} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H12v17H6.5A2.5 2.5 0 0 0 4 22.5v-17Z"/><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H12v17h5.5a2.5 2.5 0 0 1 2.5 2.5v-17Z"/></svg>);
+    case 'chart':
+      return (<svg style={s} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>);
+    case 'play':
+      return (<svg style={s} viewBox="0 0 24 24" fill={color} stroke="none"><path d="M7 4.5v15a1 1 0 0 0 1.53.85l12-7.5a1 1 0 0 0 0-1.7l-12-7.5A1 1 0 0 0 7 4.5Z"/></svg>);
+    default:
+      return null;
+  }
+}
+
+// 기기의 로컬 날짜를 "YYYY-MM-DD" 문자열로 변환 (UTC 변환 없이, 자정~오전 시간대 오차 방지)
+const getLocalDateStr = (d = new Date()) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+// "YYYY-MM-DD" 문자열을 "9월 27일 (일)" 형태로 변환 (직접 분해해서 타임존 오차 방지)
+const formatDateLabel = (dateStr) => {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  return date.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' });
+};
+
+// "YYYY-MM-DD" -> "9월 27일" (짧은 형태, 목록 제목용)
+const formatDateShort = (dateStr) => {
+  const [, m, d] = dateStr.split('-').map(Number);
+  return `${m}월 ${d}일`;
+};
+
+// 기간 표시용 짧은 포맷 (9/28)
+const formatDateMD = (dateStr) => {
+  const [, m, d] = dateStr.split('-').map(Number);
+  return `${m}/${d}`;
+};
+
 // 서버 에러 응답에서 사용자에게 보여줄 메시지 꺼내기 (409 중복, 400 형식 오류 등)
 const errorMessage = (err) => {
   const data = err.response?.data;
@@ -52,7 +143,7 @@ const errorMessage = (err) => {
 
 const defaultForm = {
   title: '', memo: '', categoryId: '', priority: 'MEDIUM',
-  dueDate: new Date().toISOString().split('T')[0],
+  dueDate: getLocalDateStr(), endDate: '',
   isRoutine: false, subject: '', studyType: 'ETC', estimatedTime: 0
 };
 
@@ -60,19 +151,31 @@ export default function App() {
   const [user, setUser] = useState(() => {
     try {
       const saved = localStorage.getItem('todi_user');
-      return saved ? JSON.parse(saved) : null;
+      return saved && localStorage.getItem('todi_token') ? JSON.parse(saved) : null;
     } catch (e) {
       return null;
     }
   });
+  // 저장된 토큰이 아직 유효한지 서버에 확인하는 동안(true) 앱 화면 대신 로딩만 보여줌
+  const [checkingSession, setCheckingSession] = useState(() => !!localStorage.getItem('todi_token'));
 
   const [tab, setTab] = useState('home');
   const [todos, setTodos] = useState([]);
+  const [routineCompletions, setRoutineCompletions] = useState([]);  // [{todoId, date}] - 루틴 할 일의 날짜별 완료 기록
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(defaultForm);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(getLocalDateStr());
   const [groups, setGroups] = useState([]);                // 카테고리별로 묶인 오늘 할 일
   const [showCatManager, setShowCatManager] = useState(false);
+  const [showRoutines, setShowRoutines] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showPlusMenu, setShowPlusMenu] = useState(false);
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState('ALL');
+  const [showCategoryFilterMenu, setShowCategoryFilterMenu] = useState(false);
+  const [calendarCategoryFilter, setCalendarCategoryFilter] = useState('ALL');
+  const [showCalendarCategoryFilterMenu, setShowCalendarCategoryFilterMenu] = useState(false);
+  const prevRateRef = useRef({});
   const categories = groups.filter(g => g.id !== null);    // "미분류"(id null)를 뺀 실제 카테고리
 
   const fetchTodos = async () => {
@@ -84,10 +187,22 @@ export default function App() {
     }
   };
 
-  const fetchGroups = async () => {
+  const fetchRoutineCompletions = async () => {
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const res = await axios.get(`${API}/categories/grouped`, { params: { date: today } });
+      const res = await axios.get(`${API}/todos/routine-completions`);
+      setRoutineCompletions(res.data);
+    } catch (err) {
+      console.error('Failed to fetch routine completions:', err);
+    }
+  };
+
+  // 루틴 할 일 하나가 특정 날짜에 완료됐는지
+  const isRoutineDoneOn = (todoId, date) =>
+      routineCompletions.some(c => c.todoId === todoId && c.date === date);
+
+  const fetchGroups = async (date) => {
+    try {
+      const res = await axios.get(`${API}/categories/grouped`, { params: { date } });
       setGroups(res.data);
     } catch (err) {
       console.error('Failed to fetch groups:', err);
@@ -96,23 +211,124 @@ export default function App() {
 
   const refresh = () => {
     fetchTodos();
-    fetchGroups();
+    fetchGroups(selectedDate);
+    fetchRoutineCompletions();
   };
 
   useEffect(() => {
     if (user) refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user, selectedDate]);
 
-  const handleLogin = (userData) => {
-    setUser(userData);
-    localStorage.setItem('todi_user', JSON.stringify(userData));
+  // 앱을 새로 열었을 때, 저장해둔 로그인 토큰이 아직 유효한지 서버에서 확인
+  // (토큰이 만료됐거나 조작된 값이면 서버가 거부하므로 다시 로그인 화면으로 보냄)
+  useEffect(() => {
+    const token = localStorage.getItem('todi_token');
+    if (!token) { setCheckingSession(false); return; }
+
+    axios.get(`${API}/auth/me`).then(res => {
+      setUser(prev => {
+        const merged = { ...(prev || {}), nickname: res.data.nickname, email: res.data.email };
+        localStorage.setItem('todi_user', JSON.stringify(merged));
+        return merged;
+      });
+    }).catch(() => {
+      localStorage.removeItem('todi_token');
+      localStorage.removeItem('todi_user');
+      setUser(null);
+    }).finally(() => setCheckingSession(false));
+  }, []);
+
+  // 로그인/회원가입/구글 로그인 성공 시 공통으로 호출됨 (AuthScreen에서 {token, email, nickname}을 넘겨줌)
+  const handleLogin = (authData) => {
+    localStorage.setItem('todi_token', authData.token);
+    let cached = null;
+    try {
+      const saved = JSON.parse(localStorage.getItem('todi_user'));
+      if (saved && saved.nickname === authData.nickname) cached = saved;
+    } catch (e) { /* 무시 */ }
+    const merged = { ...(cached || {}), nickname: authData.nickname, email: authData.email };
+    setUser(merged);
+    localStorage.setItem('todi_user', JSON.stringify(merged));
   };
 
   const handleLogout = () => {
     setUser(null);
     localStorage.removeItem('todi_user');
+    localStorage.removeItem('todi_token');
   };
+
+  // 닉네임 변경 후: 로그인 정보 갱신 + 새 닉네임으로 데이터 다시 불러오기
+  // newToken: 서버가 새 닉네임으로 다시 발급해준 로그인 토큰. 기존 토큰에는 옛 닉네임이 그대로 박혀 있어서,
+  // 이걸로 안 바꾸면 다음 요청부터 서버가 옛 닉네임으로 인증해버려 방금 옮겨놓은 데이터가 안 보이게 됨
+  const handleNicknameChanged = (newNickname, newToken) => {
+    if (newToken) localStorage.setItem('todi_token', newToken);
+    const updated = { ...user, nickname: newNickname };
+    setUser(updated);
+    localStorage.setItem('todi_user', JSON.stringify(updated));
+    setTimeout(refresh, 0);
+  };
+
+  // 회원 탈퇴 완료 후: 로그인 정보를 전부 지우고 로그인 화면으로
+  const handleWithdrawn = () => {
+    setUser(null);
+    localStorage.removeItem('todi_user');
+    localStorage.removeItem('todi_token');
+  };
+
+  // 상태메시지 변경 (이 기기의 로그인 정보에만 저장, 서버 데이터는 안 건드림)
+  const handleStatusMessageChanged = (newMessage) => {
+    const updated = { ...user, statusMessage: newMessage };
+    setUser(updated);
+    localStorage.setItem('todi_user', JSON.stringify(updated));
+  };
+
+  // 아바타 이모티콘 변경 (이 기기의 로그인 정보에만 저장)
+  const handleAvatarChanged = (emoji) => {
+    const updated = { ...user, avatarEmoji: emoji, avatarType: 'emoji' };
+    setUser(updated);
+    localStorage.setItem('todi_user', JSON.stringify(updated));
+  };
+
+  // 아바타 표시 크기 변경 (이 기기의 로그인 정보에만 저장)
+  const handleAvatarSizeChanged = (size) => {
+    const updated = { ...user, avatarSize: size };
+    setUser(updated);
+    localStorage.setItem('todi_user', JSON.stringify(updated));
+  };
+
+  // 프로필 사진 업로드 성공 후: 사진을 쓰도록 표시 + 캐시 무효화용 버전 갱신
+  const handlePhotoChanged = () => {
+    const updated = { ...user, avatarType: 'photo', avatarPhotoVersion: Date.now() };
+    setUser(updated);
+    localStorage.setItem('todi_user', JSON.stringify(updated));
+  };
+
+  // 프로필 사진 삭제 후: 다시 이모티콘으로
+  const handlePhotoRemoved = () => {
+    const updated = { ...user, avatarType: 'emoji' };
+    setUser(updated);
+    localStorage.setItem('todi_user', JSON.stringify(updated));
+  };
+
+  // 100% 달성 감지는 훅이라 이른 return보다 먼저 호출돼야 함 (Rules of Hooks)
+  const celebrationTodos = todos.filter(t => t.dueDate === selectedDate);
+  const celebrationRate = celebrationTodos.length === 0 ? 0 : Math.round((celebrationTodos.filter(t => t.completed).length / celebrationTodos.length) * 100);
+  useEffect(() => {
+    const prevRate = prevRateRef.current[selectedDate];
+    if (celebrationTodos.length > 0 && celebrationRate === 100 && prevRate !== 100) {
+      setShowCelebration(true);
+    }
+    prevRateRef.current[selectedDate] = celebrationRate;
+  }, [celebrationRate, selectedDate, celebrationTodos.length]);
+
+  if (checkingSession) {
+    return (
+        <div style={{minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg, color: C.muted, fontSize: 13}}>
+          불러오는 중...
+        </div>
+    );
+  }
 
   if (!user) {
     return <AuthScreen onLogin={handleLogin} />;
@@ -130,6 +346,7 @@ export default function App() {
       const body = {
         ...form,
         categoryId: form.categoryId === '' ? null : Number(form.categoryId),
+        endDate: form.endDate === '' ? null : form.endDate,
         nickname: user.nickname,
       };
       await axios.post(`${API}/todos`, body);
@@ -143,7 +360,8 @@ export default function App() {
 
   const toggleComplete = async (id) => {
     try {
-      await axios.patch(`${API}/todos/${id}/complete`);
+      // date를 같이 보내야 루틴 할 일이 "그 날짜만" 완료 처리됨 (일반 할 일은 서버에서 무시하고 그냥 토글)
+      await axios.patch(`${API}/todos/${id}/complete`, null, { params: { date: selectedDate } });
       refresh();
     } catch (err) {
       console.error('Failed to toggle todo:', err);
@@ -159,34 +377,58 @@ export default function App() {
     }
   };
 
-  const todayStr = new Date().toISOString().split('T')[0];
-  const todayTodos = todos.filter(t => t.dueDate === todayStr);
-  const selectedTodos = todos.filter(t => t.dueDate === selectedDate);
-  const completed = todayTodos.filter(t => t.completed);
-  const rate = todayTodos.length === 0 ? 0 : Math.round((completed.length / todayTodos.length) * 100);
+  const todayStr = getLocalDateStr();
+  const isToday = selectedDate === todayStr;
+  // 선택한 날짜의 할 일: 그 날짜에 정확히 등록된 할 일 + 시작일이 지난 루틴 할 일(완료 여부는 그 날짜 기준)
+  const selectedTodos = [
+    ...todos.filter(t => !t.isRoutine && t.dueDate === selectedDate),
+    ...todos.filter(t => t.isRoutine && t.dueDate <= selectedDate)
+        .map(t => ({...t, completed: isRoutineDoneOn(t.id, selectedDate)})),
+  ];
+
+  // 카테고리 색깔 순서 맵 (홈 화면 카테고리 순서와 동일하게)
+  const colorOrderMap = Object.fromEntries(groups.map((g, idx) => [g.id, idx]));
+
+  // 카테고리 필터 적용된 목록 (전체 보기면 그대로, 아니면 선택된 카테고리만)
+  const visibleGroups = categoryFilter === 'ALL' ? groups : groups.filter(g => (g.id ?? 'NONE') === categoryFilter);
+
+  // 할 일을 카테고리 색깔 순서로 정렬 (같은 카테고리끼리는 등록 순서 유지)
+  const sortByColor = (list) => {
+    return [...list].sort((a, b) => {
+      const orderA = colorOrderMap[a.categoryId] ?? 999;
+      const orderB = colorOrderMap[b.categoryId] ?? 999;
+      if (orderA !== orderB) return orderA - orderB;
+      return a.id - b.id;
+    });
+  };
+  const completed = selectedTodos.filter(t => t.completed);
+  const rate = selectedTodos.length === 0 ? 0 : Math.round((completed.length / selectedTodos.length) * 100);
 
   return (
       <div style={{background: C.bg, minHeight: '100vh', maxWidth: 480, margin: '0 auto', fontFamily: '-apple-system, sans-serif', color: C.text}}>
 
         {/* 헤더 */}
         <div style={{background: 'linear-gradient(160deg, #FFE8F2 0%, #F0E4FF 100%)', padding: '48px 20px 16px', borderBottom: `1px solid ${C.border}`}}>
-          <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8}}>
-            <div style={{fontSize: 11, fontWeight: 700, color: C.pinkDark}}>
-              🐾 {user.nickname} 님의 스터디룸
+          <div style={{display: 'flex', alignItems: 'center', gap: 12, marginBottom: 2}}>
+            <Avatar user={user} size={AVATAR_HEADER_PX[user.avatarSize || 'medium']}/>
+            <div style={{flex: 1, minWidth: 0}}>
+              <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8}}>
+                <div style={{fontSize: 17, fontWeight: 700, color: C.pinkDark, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
+                  {user.nickname}'s room
+                </div>
+                <button onClick={() => setShowSettings(true)} style={{background: 'none', border: 'none', color: C.muted, cursor: 'pointer', opacity: 0.8, lineHeight: 1, flexShrink: 0, display: 'flex'}}>
+                  <Icon name="settings" size={32}/>
+                </button>
+              </div>
+              <div style={{fontSize: 14, fontWeight: 600, color: C.pinkDark, opacity: 0.8, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
+                🐾 {user.statusMessage || '상태메시지를 설정해보세요'}
+              </div>
             </div>
-            <button onClick={handleLogout} style={{background: 'none', border: 'none', fontSize: 11, color: C.muted, cursor: 'pointer', opacity: 0.8}}>
-              로그아웃 🚪
-            </button>
           </div>
-          <div style={{display: 'flex', alignItems: 'center', gap: 10}}>
-            <span style={{fontSize: 36}}>🐈‍⬛</span>
-            <div>
-              <div style={{fontSize: 10, color: C.pinkDark, letterSpacing: 2, fontWeight: 600}}>STUDY PLANNER</div>
-              <div style={{fontSize: 22, fontWeight: 800, background: `linear-gradient(135deg, ${C.pinkDark}, ${C.lavender})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent'}}>Todi</div>
-            </div>
-            <div style={{marginLeft: 'auto', textAlign: 'right'}}>
-              <div style={{fontSize: 11, color: C.muted}}>{new Date().toLocaleDateString('ko-KR', {month: 'long', day: 'numeric', weekday: 'short'})}</div>
-              <div style={{fontSize: 16, fontWeight: 700, color: C.pinkDark}}>{rate}% 완료 🎀</div>
+          <div style={{display: 'flex', justifyContent: 'flex-end', marginTop: -8}}>
+            <div style={{textAlign: 'right'}}>
+              <div style={{fontSize: 11, color: C.muted}}>{formatDateLabel(selectedDate)}</div>
+              <div style={{display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, fontSize: 16, fontWeight: 700, color: C.pinkDark}}>{rate}% 완료 <Icon name="award" size={16} color={rate === 100 ? C.pinkDark : C.muted} strokeWidth={rate === 100 ? 2.4 : 1.8}/></div>
             </div>
           </div>
         </div>
@@ -196,49 +438,129 @@ export default function App() {
 
           {tab === 'home' && <>
             <div style={{background: 'linear-gradient(135deg, #FFD6E7, #E8D5FF)', borderRadius: 20, padding: 20, marginBottom: 16, color: C.pinkDark}}>
-              <div style={{fontSize: 13, opacity: 0.8, marginBottom: 8}}>오늘의 진행률</div>
-              <div style={{fontSize: 36, fontWeight: 800, marginBottom: 10, color: C.pinkDark}}>{rate}%</div>
-              <div style={{height: 8, background: 'rgba(255,255,255,0.6)', borderRadius: 4}}>
-                <div style={{width: `${rate}%`, height: '100%', background: `linear-gradient(90deg, ${C.pinkDark}, ${C.lavender})`, borderRadius: 4, transition: 'width 0.5s'}}/>
+              <div style={{fontSize: 13, opacity: 0.8, marginBottom: 8}}>{isToday ? '오늘' : formatDateShort(selectedDate)}의 진행률</div>
+              {selectedTodos.length === 0 ? (
+                <>
+                  <div style={{fontSize: 15, fontWeight: 700, marginBottom: 10, color: C.pinkDark}}>아직 추가한 할 일이 없어요</div>
+                  <div style={{height: 8, background: 'rgba(255,255,255,0.55)', borderRadius: 4, border: '1px solid rgba(255,255,255,0.8)'}}/>
+                </>
+              ) : (
+                <>
+                  <div style={{fontSize: 36, fontWeight: 800, marginBottom: 10, color: C.pinkDark}}>{rate}%</div>
+                  <div style={{height: 8, background: 'rgba(255,255,255,0.55)', borderRadius: 4, border: '1px solid rgba(255,255,255,0.8)'}}>
+                    <div style={{width: `${Math.max(rate, 4)}%`, height: '100%', background: `linear-gradient(90deg, ${C.pinkDark}, ${C.lavender})`, borderRadius: 4, transition: 'width 0.5s'}}/>
+                  </div>
+                  <div style={{fontSize: 12, opacity: 0.8, marginTop: 6}}>{completed.length}/{selectedTodos.length} 완료</div>
+                </>
+              )}
+            </div>
+
+            <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 8}}>
+              <div style={{fontSize: 12, color: C.muted, fontWeight: 600, flexShrink: 0}}>{isToday ? '오늘' : formatDateShort(selectedDate)} 할 일</div>
+              <div style={{display: 'flex', alignItems: 'center', gap: 6, position: 'relative', minWidth: 0}}>
+                <button onClick={() => setShowCategoryFilterMenu(v => !v)}
+                        style={{display: 'flex', alignItems: 'center', gap: 4, background: categoryFilter !== 'ALL' ? '#FFE4F0' : 'none', border: `1px solid ${categoryFilter !== 'ALL' ? C.pinkDark : C.border}`, borderRadius: 12, padding: '4px 10px', fontSize: 11, color: C.pinkDark, cursor: 'pointer', maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
+                  <Icon name="palette" size={12}/>
+                  {categoryFilter === 'ALL' ? '카테고리' : (groups.find(g => (g.id ?? 'NONE') === categoryFilter)?.name || '카테고리')}
+                </button>
+                <button onClick={() => setShowRoutines(true)}
+                        style={{display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: `1px solid ${C.border}`, borderRadius: 12, padding: '4px 10px', fontSize: 11, color: C.pinkDark, cursor: 'pointer', flexShrink: 0}}>
+                  <Icon name="repeat" size={12}/> 루틴 보기
+                </button>
+
+                {showCategoryFilterMenu && (
+                    <>
+                      <div onClick={() => setShowCategoryFilterMenu(false)} style={{position: 'fixed', inset: 0, zIndex: 89}}/>
+                      <div style={{position: 'absolute', top: '100%', left: 0, marginTop: 6, background: 'white', borderRadius: 12, border: `1px solid ${C.border}`, boxShadow: '0 8px 24px rgba(255,143,171,0.2)', zIndex: 90, minWidth: 140, maxHeight: 220, overflowY: 'auto'}}>
+                        <button onClick={() => { setCategoryFilter('ALL'); setShowCategoryFilterMenu(false); }}
+                                style={{width: '100%', textAlign: 'left', padding: '9px 12px', border: 'none', background: categoryFilter === 'ALL' ? '#FFF0F5' : 'white', color: C.text, fontSize: 12, fontWeight: categoryFilter === 'ALL' ? 700 : 400, cursor: 'pointer'}}>
+                          전체 보기
+                        </button>
+                        {groups.map(group => {
+                          const key = group.id ?? 'NONE';
+                          return (
+                              <button key={key} onClick={() => { setCategoryFilter(key); setShowCategoryFilterMenu(false); }}
+                                      style={{width: '100%', textAlign: 'left', padding: '9px 12px', border: 'none', background: categoryFilter === key ? '#FFF0F5' : 'white', color: C.text, fontSize: 12, fontWeight: categoryFilter === key ? 700 : 400, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6}}>
+                                <span style={{display: 'inline-block', width: 7, height: 7, borderRadius: 4, background: group.color || C.pink, flexShrink: 0}}/>
+                                <span style={{overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>{group.name}</span>
+                              </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                )}
               </div>
-              <div style={{fontSize: 12, opacity: 0.8, marginTop: 6}}>{completed.length}/{todayTodos.length} 완료</div>
             </div>
 
-            <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10}}>
-              <div style={{fontSize: 12, color: C.muted, fontWeight: 600}}>오늘 할 일</div>
-              <button onClick={() => setShowCatManager(true)}
-                      style={{background: 'none', border: `1px solid ${C.border}`, borderRadius: 12, padding: '4px 10px', fontSize: 11, color: C.pinkDark, cursor: 'pointer'}}>
-                🎨 카테고리 관리
-              </button>
-            </div>
-
-            {groups.map(group => (
+            {visibleGroups.map(group => (
                 <CategoryGroup key={group.id ?? 'none'} group={group}
                                onAdd={openForm} onToggle={toggleComplete} onDelete={deleteTodo}/>
             ))}
 
-            {groups.length === 0 && (
-                <div style={{textAlign: 'center', padding: 30, color: C.muted}}>
-                  <div style={{fontSize: 36, marginBottom: 8}}>✨</div>
-                  <div>오늘 할 일이 없어요!</div>
+            {visibleGroups.length === 0 && (
+                <div style={{textAlign: 'center', padding: '30px 20px 40px', color: C.muted}}>
+                  <div style={{marginBottom: 8, display: 'flex', justifyContent: 'center'}}>
+                    <Icon name="paw" size={36} color={C.pink} strokeWidth={1.5}/>
+                  </div>
+                  <div style={{marginBottom: 16}}>{categoryFilter !== 'ALL' ? '이 카테고리엔 할 일이 없어요!' : `${isToday ? '오늘' : '이 날은'} 할 일이 없어요!`}</div>
+                  <button onClick={() => openForm(categoryFilter !== 'ALL' && categoryFilter !== 'NONE' ? categoryFilter : undefined)}
+                          style={{padding: '10px 22px', borderRadius: 16, border: 'none', background: `linear-gradient(135deg, ${C.pinkDark}, ${C.lavender})`, color: 'white', fontSize: 13, fontWeight: 700, cursor: 'pointer'}}>
+                    + 할 일 추가하기
+                  </button>
                 </div>
             )}
           </>}
 
           {tab === 'calendar' && <>
             <CalendarView selectedDate={selectedDate} onSelect={setSelectedDate} todos={todos}/>
-            <div style={{fontSize: 12, color: C.muted, margin: '12px 0 8px', fontWeight: 600}}>
-              {selectedDate === todayStr ? '오늘' : selectedDate} 할 일
+            <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '12px 0 8px', gap: 8}}>
+              <div style={{fontSize: 12, color: C.muted, fontWeight: 600, flexShrink: 0}}>
+                {isToday ? '오늘' : formatDateShort(selectedDate)} 할 일
+              </div>
+              <div style={{position: 'relative'}}>
+                <button onClick={() => setShowCalendarCategoryFilterMenu(v => !v)}
+                        style={{display: 'flex', alignItems: 'center', gap: 4, background: calendarCategoryFilter !== 'ALL' ? '#FFE4F0' : 'none', border: `1px solid ${calendarCategoryFilter !== 'ALL' ? C.pinkDark : C.border}`, borderRadius: 12, padding: '4px 10px', fontSize: 11, color: C.pinkDark, cursor: 'pointer', maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
+                  <Icon name="palette" size={12}/>
+                  {calendarCategoryFilter === 'ALL' ? '카테고리' : (groups.find(g => (g.id ?? 'NONE') === calendarCategoryFilter)?.name || '카테고리')}
+                </button>
+                {showCalendarCategoryFilterMenu && (
+                    <>
+                      <div onClick={() => setShowCalendarCategoryFilterMenu(false)} style={{position: 'fixed', inset: 0, zIndex: 89}}/>
+                      <div style={{position: 'absolute', top: '100%', right: 0, marginTop: 6, background: 'white', borderRadius: 12, border: `1px solid ${C.border}`, boxShadow: '0 8px 24px rgba(255,143,171,0.2)', zIndex: 90, minWidth: 140, maxHeight: 220, overflowY: 'auto'}}>
+                        <button onClick={() => { setCalendarCategoryFilter('ALL'); setShowCalendarCategoryFilterMenu(false); }}
+                                style={{width: '100%', textAlign: 'left', padding: '9px 12px', border: 'none', background: calendarCategoryFilter === 'ALL' ? '#FFF0F5' : 'white', color: C.text, fontSize: 12, fontWeight: calendarCategoryFilter === 'ALL' ? 700 : 400, cursor: 'pointer'}}>
+                          전체 보기
+                        </button>
+                        {groups.map(group => {
+                          const key = group.id ?? 'NONE';
+                          return (
+                              <button key={key} onClick={() => { setCalendarCategoryFilter(key); setShowCalendarCategoryFilterMenu(false); }}
+                                      style={{width: '100%', textAlign: 'left', padding: '9px 12px', border: 'none', background: calendarCategoryFilter === key ? '#FFF0F5' : 'white', color: C.text, fontSize: 12, fontWeight: calendarCategoryFilter === key ? 700 : 400, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6}}>
+                                <span style={{display: 'inline-block', width: 7, height: 7, borderRadius: 4, background: group.color || C.pink, flexShrink: 0}}/>
+                                <span style={{overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>{group.name}</span>
+                              </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                )}
+              </div>
             </div>
-            {selectedTodos.length === 0 && (
-                <div style={{textAlign: 'center', padding: 20, color: C.muted}}>
-                  <div style={{fontSize: 28, marginBottom: 6}}>🗓</div>
-                  <div>이 날은 할 일이 없어요</div>
-                </div>
-            )}
-            {selectedTodos.map(todo => (
-                <TodoCard key={todo.id} todo={todo} onToggle={toggleComplete} onDelete={deleteTodo}/>
-            ))}
+            {(() => {
+              const calendarTodos = sortByColor(selectedTodos).filter(t =>
+                  calendarCategoryFilter === 'ALL' || (t.categoryId ?? 'NONE') === calendarCategoryFilter);
+              if (calendarTodos.length === 0) {
+                return (
+                    <div style={{textAlign: 'center', padding: 20, color: C.muted}}>
+                      <div style={{display: 'flex', justifyContent: 'center', marginBottom: 6, opacity: 0.6}}><Icon name="calendar" size={26} color={C.muted}/></div>
+                      <div>{calendarCategoryFilter !== 'ALL' ? '이 카테고리엔 할 일이 없어요' : '이 날은 할 일이 없어요'}</div>
+                    </div>
+                );
+              }
+              return calendarTodos.map(todo => (
+                  <TodoCard key={todo.id} todo={todo} onToggle={toggleComplete} onDelete={deleteTodo}/>
+              ));
+            })()}
           </>}
 
           {tab === 'timer' && <TimerTab/>}
@@ -249,7 +571,7 @@ export default function App() {
         {showForm && (
             <div style={{position: 'fixed', bottom: 0, left: 0, right: 0, maxWidth: 480, margin: '0 auto', background: C.white, borderRadius: '24px 24px 0 0', padding: '16px 24px 40px', boxShadow: `0 -4px 30px rgba(255,143,171,0.2)`, zIndex: 100, boxSizing: 'border-box'}}>
               <div style={{width: 36, height: 4, background: C.border, borderRadius: 2, margin: '0 auto 16px'}}/>
-              <div style={{fontSize: 15, fontWeight: 700, color: C.pink, marginBottom: 14}}>🐾 새로운 할 일</div>
+              <div style={{display: 'flex', alignItems: 'center', gap: 6, fontSize: 15, fontWeight: 700, color: C.pink, marginBottom: 14}}><Icon name="paw" size={15} color={C.pink}/> 새로운 할 일</div>
               <input placeholder="할 일 제목 *" value={form.title}
                      onChange={e => setForm({...form, title: e.target.value})} style={inp}/>
               <input placeholder="메모 (선택)" value={form.memo}
@@ -259,15 +581,27 @@ export default function App() {
                 <option value="">카테고리 없음</option>
                 {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
-              <select value={form.priority} onChange={e => setForm({...form, priority: e.target.value})}
-                      style={{...inp, color: C.text}}>
-                <option value="HIGH">🔴 높음</option>
-                <option value="MEDIUM">🟡 보통</option>
-                <option value="LOW">🟢 낮음</option>
-              </select>
               <input type="date" value={form.dueDate}
-                     onChange={e => setForm({...form, dueDate: e.target.value})}
+                     onChange={e => setForm({...form, dueDate: e.target.value, endDate: form.endDate && form.endDate < e.target.value ? e.target.value : form.endDate})}
                      style={{...inp, width: '100%', WebkitAppearance: 'none', appearance: 'none', display: 'block'}}/>
+              <label style={{display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: C.text, margin: '10px 2px 4px', cursor: 'pointer'}}>
+                <input type="checkbox" checked={form.endDate !== ''}
+                       onChange={e => setForm({...form, endDate: e.target.checked ? form.dueDate : ''})}
+                       style={{width: 16, height: 16, cursor: 'pointer'}}/>
+                <Icon name="calendar" size={14} color={C.pink}/> 기간으로 설정
+              </label>
+              {form.endDate !== '' && (
+                  <input type="date" value={form.endDate} min={form.dueDate}
+                         onChange={e => setForm({...form, endDate: e.target.value})}
+                         style={{...inp, width: '100%', WebkitAppearance: 'none', appearance: 'none', display: 'block'}}/>
+              )}
+              <div style={{height: 1, background: C.border, margin: '12px 2px'}}/>
+              <label style={{display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: C.text, margin: '4px 2px', cursor: 'pointer'}}>
+                <input type="checkbox" checked={form.isRoutine}
+                       onChange={e => setForm({...form, isRoutine: e.target.checked})}
+                       style={{width: 16, height: 16, cursor: 'pointer'}}/>
+                <Icon name="repeat" size={13}/> 루틴으로 표시 (반복되는 일정)
+              </label>
               <div style={{display: 'flex', gap: 8, marginTop: 4}}>
                 <button onClick={() => setShowForm(false)} style={{flex: 1, padding: 13, borderRadius: 14, border: `1px solid ${C.border}`, background: 'white', fontSize: 14, cursor: 'pointer', color: C.muted}}>취소</button>
                 <button onClick={addTodo} style={{flex: 2, padding: 13, borderRadius: 14, border: 'none', background: `linear-gradient(135deg, ${C.pinkDark}, ${C.lavender})`, color: 'white', fontSize: 14, fontWeight: 700, cursor: 'pointer'}}>추가 ✨</button>
@@ -280,43 +614,81 @@ export default function App() {
             <CategoryManager categories={categories} onClose={() => setShowCatManager(false)} onChanged={refresh}/>
         )}
 
+        {/* 루틴 모아보기 모달 */}
+        {showRoutines && (
+            <RoutineManager onClose={() => setShowRoutines(false)}/>
+        )}
+
+        {/* 설정 모달 */}
+        {showSettings && (
+            <SettingsModal user={user} onClose={() => setShowSettings(false)} onLogout={handleLogout} onWithdraw={handleWithdrawn} onNicknameChanged={handleNicknameChanged} onStatusMessageChanged={handleStatusMessageChanged} onAvatarChanged={handleAvatarChanged} onAvatarSizeChanged={handleAvatarSizeChanged} onPhotoChanged={handlePhotoChanged} onPhotoRemoved={handlePhotoRemoved}/>
+        )}
+
+        {/* + 버튼 메뉴 (할 일 추가 / 카테고리 관리) */}
+        {showPlusMenu && (
+            <PlusMenu onClose={() => setShowPlusMenu(false)}
+                      onAddTodo={() => { setShowPlusMenu(false); openForm(null); }}
+                      onManageCategories={() => { setShowPlusMenu(false); setShowCatManager(true); }}/>
+        )}
+
+        {/* 100% 달성 축하 모달 */}
+        {showCelebration && (
+            <div onClick={() => setShowCelebration(false)}
+                 style={{position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.45)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24}}>
+              <div onClick={e => e.stopPropagation()}
+                   style={{background: 'white', borderRadius: 26, padding: '30px 26px 28px', textAlign: 'center', maxWidth: 300, boxShadow: '0 24px 60px rgba(0,0,0,0.3)'}}>
+                {/* 설정한 프로필(아바타)이 직접 말하는 것처럼 보이도록 말풍선으로 감싼 인사말 */}
+                <div style={{position: 'relative', display: 'inline-block', background: '#FFF0F5', borderRadius: 18, padding: '14px 18px', marginBottom: 16, maxWidth: '100%'}}>
+                  <div style={{fontSize: 17, fontWeight: 800, color: C.pinkDark, marginBottom: 4}}>오늘 할 일 다 끝냈다!</div>
+                  <div style={{fontSize: 12, color: C.muted, lineHeight: 1.5}}>완벽한 하루였어, 진짜 잘했어! 🎉</div>
+                  <div style={{position: 'absolute', bottom: -8, left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '9px solid transparent', borderRight: '9px solid transparent', borderTop: '9px solid #FFF0F5'}}/>
+                </div>
+                <div style={{display: 'flex', justifyContent: 'center'}}><Avatar user={user} size={66}/></div>
+                <button onClick={() => setShowCelebration(false)}
+                        style={{marginTop: 18, padding: '13px 30px', borderRadius: 16, border: 'none', background: `linear-gradient(135deg, ${C.pinkDark}, ${C.lavender})`, color: 'white', fontSize: 14, fontWeight: 700, cursor: 'pointer'}}>
+                  고마워!
+                </button>
+              </div>
+            </div>
+        )}
+
         {/* 하단 탭바 */}
         {!showForm && (
-            <div style={{position: 'fixed', bottom: 0, left: 0, right: 0, maxWidth: 480, margin: '0 auto', background: C.white, borderTop: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', paddingBottom: 'calc(8px + env(safe-area-inset-bottom))', paddingTop: '6px', zIndex: 50, boxShadow: '0 -2px 10px rgba(255,143,171,0.08)'}}>
-              <button onClick={() => setTab('home')} style={{flex: 1, padding: '4px 0', border: 'none', background: 'transparent', color: tab === 'home' ? C.pink : C.muted, fontSize: 10, cursor: 'pointer'}}>
-                <div style={{fontSize: 22}}>🏠</div>
+            <div style={{position: 'fixed', bottom: 4, left: 0, right: 0, maxWidth: 480, margin: '0 auto', background: C.white, borderTop: `1px solid ${C.border}`, borderRadius: 18, display: 'flex', alignItems: 'center', paddingBottom: 'calc(4px + env(safe-area-inset-bottom))', paddingTop: '8px', zIndex: 50, boxShadow: '0 -2px 10px rgba(255,143,171,0.08)'}}>
+              <button onClick={() => setTab('home')} style={{flex: 1, padding: '4px 0', border: 'none', background: 'transparent', color: tab === 'home' ? C.pink : C.muted, fontSize: 10, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center'}}>
+                <div style={{background: tab === 'home' ? '#FFE4F0' : 'transparent', borderRadius: 12, padding: '3px 14px', transition: 'background 0.15s'}}><Icon name="home" size={22} color={tab === 'home' ? C.pink : C.muted} strokeWidth={tab === 'home' ? 2.1 : 1.8}/></div>
                 <div style={{fontWeight: tab === 'home' ? 700 : 400, marginTop: 2}}>홈</div>
               </button>
-              <button onClick={() => setTab('calendar')} style={{flex: 1, padding: '4px 0', border: 'none', background: 'transparent', color: tab === 'calendar' ? C.pink : C.muted, fontSize: 10, cursor: 'pointer'}}>
-                <div style={{fontSize: 22}}>📅</div>
+              <button onClick={() => setTab('calendar')} style={{flex: 1, padding: '4px 0', border: 'none', background: 'transparent', color: tab === 'calendar' ? C.pink : C.muted, fontSize: 10, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center'}}>
+                <div style={{background: tab === 'calendar' ? '#FFE4F0' : 'transparent', borderRadius: 12, padding: '3px 14px', transition: 'background 0.15s'}}><Icon name="calendar" size={21} color={tab === 'calendar' ? C.pink : C.muted} strokeWidth={tab === 'calendar' ? 2.1 : 1.8}/></div>
                 <div style={{fontWeight: tab === 'calendar' ? 700 : 400, marginTop: 2}}>캘린더</div>
               </button>
 
-              {/* 중앙 플러스 추가 버튼 */}
+              {/* 중앙 플러스 추가 버튼: 다른 탭과 같은 높이로 배치 */}
               <div style={{flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center'}}>
                 <button
-                    onClick={() => openForm(null)}
+                    onClick={() => setShowPlusMenu(true)}
                     style={{
                       width: 46, height: 46, borderRadius: 23,
                       background: `linear-gradient(135deg, ${C.pinkDark}, ${C.lavender})`,
                       color: 'white', fontSize: 26, fontWeight: 700, border: 'none',
                       cursor: 'pointer', boxShadow: `0 4px 14px rgba(255,92,138,0.4)`,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      transform: 'translateY(-6px)', transition: 'all 0.15s ease'
+                      transition: 'transform 0.15s ease'
                     }}
-                    onMouseDown={e => e.currentTarget.style.transform = 'translateY(-3px) scale(0.95)'}
-                    onMouseUp={e => e.currentTarget.style.transform = 'translateY(-6px) scale(1)'}
+                    onMouseDown={e => e.currentTarget.style.transform = 'scale(0.92)'}
+                    onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
                 >
                   +
                 </button>
               </div>
 
-              <button onClick={() => setTab('timer')} style={{flex: 1, padding: '4px 0', border: 'none', background: 'transparent', color: tab === 'timer' ? C.pink : C.muted, fontSize: 10, cursor: 'pointer'}}>
-                <div style={{fontSize: 22}}>⏱</div>
+              <button onClick={() => setTab('timer')} style={{flex: 1, padding: '4px 0', border: 'none', background: 'transparent', color: tab === 'timer' ? C.pink : C.muted, fontSize: 10, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center'}}>
+                <div style={{background: tab === 'timer' ? '#FFE4F0' : 'transparent', borderRadius: 12, padding: '3px 14px', transition: 'background 0.15s'}}><Icon name="timer" size={21} color={tab === 'timer' ? C.pink : C.muted} strokeWidth={tab === 'timer' ? 2.1 : 1.8}/></div>
                 <div style={{fontWeight: tab === 'timer' ? 700 : 400, marginTop: 2}}>타이머</div>
               </button>
-              <button onClick={() => setTab('memo')} style={{flex: 1, padding: '4px 0', border: 'none', background: 'transparent', color: tab === 'memo' ? C.pink : C.muted, fontSize: 10, cursor: 'pointer'}}>
-                <div style={{fontSize: 22}}>📝</div>
+              <button onClick={() => setTab('memo')} style={{flex: 1, padding: '4px 0', border: 'none', background: 'transparent', color: tab === 'memo' ? C.pink : C.muted, fontSize: 10, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center'}}>
+                <div style={{background: tab === 'memo' ? '#FFE4F0' : 'transparent', borderRadius: 12, padding: '3px 14px', transition: 'background 0.15s'}}><Icon name="note" size={20} color={tab === 'memo' ? C.pink : C.muted} strokeWidth={tab === 'memo' ? 2.1 : 1.8}/></div>
                 <div style={{fontWeight: tab === 'memo' ? 700 : 400, marginTop: 2}}>메모</div>
               </button>
             </div>
@@ -335,7 +707,6 @@ function TodoCard({ todo, onToggle, onDelete, compact, hideCategory }) {
         </button>
         <div style={{flex: 1}}>
           <div style={{fontSize: 14, fontWeight: 500, color: todo.completed ? C.muted : C.text, textDecoration: todo.completed ? 'line-through' : 'none'}}>
-            {todo.priority && <span style={{display: 'inline-block', width: 6, height: 6, borderRadius: 3, background: PRIORITY_COLOR[todo.priority], marginRight: 6, verticalAlign: 'middle'}}/>}
             {todo.title}
           </div>
           {todo.memo && <div style={{fontSize: 11, color: C.muted, marginTop: 2}}>{todo.memo}</div>}
@@ -345,9 +716,14 @@ function TodoCard({ todo, onToggle, onDelete, compact, hideCategory }) {
                   {todo.category}
                 </span>
             )}
+            {todo.endDate && todo.endDate !== todo.dueDate && (
+                <span style={{display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, color: C.muted, background: '#F5F0FF', padding: '1px 7px', borderRadius: 8}}>
+                  <Icon name="calendar" size={10} color={C.muted}/> {formatDateMD(todo.dueDate)}~{formatDateMD(todo.endDate)}
+                </span>
+            )}
           </div>
         </div>
-        <button onClick={() => onDelete(todo.id)} style={{background: 'none', border: 'none', color: C.muted, fontSize: 14, cursor: 'pointer', opacity: 0.5}}>🗑</button>
+        <button onClick={() => onDelete(todo.id)} style={{background: 'none', border: 'none', color: C.muted, cursor: 'pointer', opacity: 0.5, display: 'flex'}}><Icon name="trash" size={15}/></button>
       </div>
   );
 }
@@ -366,6 +742,474 @@ function CategoryGroup({ group, onAdd, onToggle, onDelete }) {
         {group.todos.map(todo => (
             <TodoCard key={todo.id} todo={todo} onToggle={onToggle} onDelete={onDelete} hideCategory/>
         ))}
+      </div>
+  );
+}
+
+// + 버튼 메뉴: 할 일 추가 / 카테고리 관리를 한 곳에서 선택
+function PlusMenu({ onClose, onAddTodo, onManageCategories }) {
+  return (
+      <div onClick={onClose} style={{position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.35)', zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center'}}>
+        <div onClick={e => e.stopPropagation()} style={{width: '100%', maxWidth: 480, background: C.white, borderRadius: '24px 24px 0 0', padding: '16px 24px 32px', boxSizing: 'border-box'}}>
+          <div style={{width: 36, height: 4, background: C.border, borderRadius: 2, margin: '0 auto 16px'}}/>
+          <button onClick={onAddTodo}
+                  style={{width: '100%', textAlign: 'left', padding: '16px', borderRadius: 14, border: `1px solid ${C.border}`, background: 'white', fontSize: 15, fontWeight: 600, color: C.text, cursor: 'pointer', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 12}}>
+            <Icon name="note" size={18} color={C.pink}/> 새 할 일 추가
+          </button>
+          <button onClick={onManageCategories}
+                  style={{width: '100%', textAlign: 'left', padding: '16px', borderRadius: 14, border: `1px solid ${C.border}`, background: 'white', fontSize: 15, fontWeight: 600, color: C.text, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12}}>
+            <Icon name="palette" size={18} color={C.pink}/> 카테고리 관리
+          </button>
+        </div>
+      </div>
+  );
+}
+
+// 프로필 / 계정 관리 모달
+// 프로필 아바타: 사진을 쓰기로 했고 실제로 로드되면 사진, 아니면 이모티콘
+function Avatar({ user, size }) {
+  const [imgFailed, setImgFailed] = useState(false);
+
+  useEffect(() => {
+    setImgFailed(false);
+  }, [user.avatarPhotoVersion, user.avatarType]);
+
+  const showPhoto = user.avatarType === 'photo' && !imgFailed;
+  if (showPhoto) {
+    const photoUrl = `${API}/account/avatar-image?nickname=${encodeURIComponent(user.nickname)}&v=${user.avatarPhotoVersion || 0}`;
+    return (
+        <img src={photoUrl} alt="프로필 사진" onError={() => setImgFailed(true)}
+             style={{width: size, height: size, borderRadius: size / 2, objectFit: 'cover', flexShrink: 0}}/>
+    );
+  }
+  return (
+      <span style={{
+        width: size, height: size, borderRadius: size / 2, boxSizing: 'border-box',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+        background: 'rgba(255,255,255,0.55)', border: '1.5px solid rgba(255,255,255,0.9)',
+        fontSize: Math.round(size * 0.6), lineHeight: 1
+      }}>{user.avatarEmoji || '🐈‍⬛'}</span>
+  );
+}
+
+const AVATAR_EMOJIS = ['🐈‍⬛', '🐶', '🐰', '🐼', '🦊', '🐹', '🐧', '🦄', '🐢', '🐙', '🦁', '🐸'];
+
+// 아바타 표시 크기 (작게/보통/크게) - 헤더용, 설정 카드용 각각의 픽셀 크기
+const AVATAR_HEADER_PX = { small: 40, medium: 54, large: 68 };
+const AVATAR_CARD_PX = { small: 34, medium: 48, large: 64 };
+
+
+// 프로필 사진 위치/확대 조절 모달: 드래그로 이동, 슬라이더로 확대, 원형 미리보기 그대로 잘라서 업로드
+function PhotoCropModal({ file, onCancel, onConfirm }) {
+  const DISPLAY = 260;
+  const OUTPUT = 480;
+  const [imgUrl, setImgUrl] = useState(null);
+  const [natural, setNatural] = useState({ w: 0, h: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState(false);
+  const dragStart = useRef({ x: 0, y: 0, px: 0, py: 0 });
+  const imgRef = useRef(null);
+
+  useEffect(() => {
+    const url = URL.createObjectURL(file);
+    setImgUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  const baseScale = natural.w ? Math.max(DISPLAY / natural.w, DISPLAY / natural.h) : 1;
+  const effScale = baseScale * zoom;
+  const dw = natural.w * effScale;
+  const dh = natural.h * effScale;
+
+  const clamp = (x, y) => {
+    const minX = Math.min(0, DISPLAY - dw);
+    const minY = Math.min(0, DISPLAY - dh);
+    return { x: Math.max(minX, Math.min(0, x)), y: Math.max(minY, Math.min(0, y)) };
+  };
+
+  const onImgLoad = (e) => {
+    const w = e.target.naturalWidth, h = e.target.naturalHeight;
+    const bScale = Math.max(DISPLAY / w, DISPLAY / h);
+    const initDw = w * bScale, initDh = h * bScale;
+    setNatural({ w, h });
+    setZoom(1);
+    setPos({ x: (DISPLAY - initDw) / 2, y: (DISPLAY - initDh) / 2 });
+  };
+
+  const handleZoomChange = (newZoom) => {
+    const newEff = baseScale * newZoom;
+    const ndw = natural.w * newEff, ndh = natural.h * newEff;
+    const cx = dw ? (DISPLAY / 2 - pos.x) / dw : 0.5;
+    const cy = dh ? (DISPLAY / 2 - pos.y) / dh : 0.5;
+    const newX = DISPLAY / 2 - cx * ndw;
+    const newY = DISPLAY / 2 - cy * ndh;
+    setZoom(newZoom);
+    setPos(clamp(newX, newY));
+  };
+
+  const startDrag = (clientX, clientY) => {
+    dragStart.current = { x: clientX, y: clientY, px: pos.x, py: pos.y };
+    setDragging(true);
+  };
+  const moveDrag = (clientX, clientY) => {
+    if (!dragging) return;
+    const dx = clientX - dragStart.current.x;
+    const dy = clientY - dragStart.current.y;
+    setPos(clamp(dragStart.current.px + dx, dragStart.current.py + dy));
+  };
+  const endDrag = () => setDragging(false);
+
+  const handleConfirm = () => {
+    if (!imgRef.current || !natural.w) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = OUTPUT;
+    canvas.height = OUTPUT;
+    const ctx = canvas.getContext('2d');
+    const sx = -pos.x / effScale;
+    const sy = -pos.y / effScale;
+    const sSize = DISPLAY / effScale;
+    ctx.drawImage(imgRef.current, sx, sy, sSize, sSize, 0, 0, OUTPUT, OUTPUT);
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      onConfirm(new File([blob], 'profile.jpg', { type: 'image/jpeg' }));
+    }, 'image/jpeg', 0.92);
+  };
+
+  return (
+      <div onClick={onCancel} style={{position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.55)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+        <div onClick={e => e.stopPropagation()} style={{background: 'white', borderRadius: 20, padding: 22, width: 300, boxSizing: 'border-box', textAlign: 'center'}}>
+          <div style={{fontSize: 14, fontWeight: 700, color: C.pinkDark, marginBottom: 14}}>사진 위치 · 크기 조절</div>
+          <div
+              onMouseDown={e => startDrag(e.clientX, e.clientY)}
+              onMouseMove={e => moveDrag(e.clientX, e.clientY)}
+              onMouseUp={endDrag}
+              onMouseLeave={endDrag}
+              onTouchStart={e => startDrag(e.touches[0].clientX, e.touches[0].clientY)}
+              onTouchMove={e => moveDrag(e.touches[0].clientX, e.touches[0].clientY)}
+              onTouchEnd={endDrag}
+              style={{width: DISPLAY, height: DISPLAY, borderRadius: '50%', overflow: 'hidden', margin: '0 auto', position: 'relative', background: '#f1f1f1', cursor: dragging ? 'grabbing' : 'grab', touchAction: 'none'}}>
+            {imgUrl && (
+                <img ref={imgRef} src={imgUrl} alt="미리보기" onLoad={onImgLoad} draggable={false}
+                     style={{position: 'absolute', left: pos.x, top: pos.y, width: dw || 'auto', height: dh || 'auto', maxWidth: 'none', userSelect: 'none'}}/>
+            )}
+          </div>
+          <input type="range" min="1" max="3" step="0.01" value={zoom}
+                 onChange={e => handleZoomChange(parseFloat(e.target.value))}
+                 style={{width: '100%', marginTop: 18}}/>
+          <div style={{display: 'flex', gap: 8, marginTop: 16}}>
+            <button onClick={onCancel}
+                    style={{flex: 1, padding: '11px 0', borderRadius: 12, border: `1px solid ${C.border}`, background: 'white', color: C.muted, fontSize: 13, fontWeight: 600, cursor: 'pointer'}}>취소</button>
+            <button onClick={handleConfirm}
+                    style={{flex: 1, padding: '11px 0', borderRadius: 12, border: 'none', background: `linear-gradient(135deg, ${C.pinkDark}, ${C.lavender})`, color: 'white', fontSize: 13, fontWeight: 700, cursor: 'pointer'}}>확인</button>
+          </div>
+        </div>
+      </div>
+  );
+}
+
+function SettingsModal({ user, onClose, onLogout, onWithdraw, onNicknameChanged, onStatusMessageChanged, onAvatarChanged, onAvatarSizeChanged, onPhotoChanged, onPhotoRemoved }) {
+  const [editingName, setEditingName] = useState(false);
+  const [newName, setNewName] = useState(user.nickname);
+  const [saving, setSaving] = useState(false);
+  const [nameError, setNameError] = useState('');
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [avatarError, setAvatarError] = useState('');
+  const photoInputRef = useRef(null);
+  const [cropFile, setCropFile] = useState(null);
+
+  const pickAvatar = (emoji) => {
+    onAvatarChanged(emoji);
+    setAvatarError('');
+    setShowAvatarPicker(false);
+  };
+
+  const handlePhotoFile = (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    setAvatarError('');
+    setCropFile(file);
+  };
+
+  const handleCropCancel = () => setCropFile(null);
+
+  const handleCropConfirm = async (croppedFile) => {
+    setCropFile(null);
+    setUploadingPhoto(true);
+    setAvatarError('');
+    try {
+      const formData = new FormData();
+      formData.append('file', croppedFile);
+      await axios.post(`${API}/account/avatar-image`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      onPhotoChanged();
+      setShowAvatarPicker(false);
+    } catch (err) {
+      setAvatarError(errorMessage(err));
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const removePhoto = async () => {
+    try {
+      await axios.delete(`${API}/account/avatar-image`);
+      onPhotoRemoved();
+      setAvatarError('');
+    } catch (err) {
+      setAvatarError(errorMessage(err));
+    }
+  };
+
+  const [editingStatus, setEditingStatus] = useState(false);
+  const [newStatus, setNewStatus] = useState(user.statusMessage || '');
+
+  const saveStatus = () => {
+    onStatusMessageChanged(newStatus.trim());
+    setEditingStatus(false);
+  };
+
+  const doLogout = () => {
+    if (!window.confirm('로그아웃 할까요?')) return;
+    onLogout();
+  };
+
+  const [withdrawing, setWithdrawing] = useState(false);
+
+  // 회원 탈퇴: 모든 할 일/카테고리/메모/타이머 기록/프로필 사진이 영구히 삭제되고 되돌릴 수 없어서 두 번 확인받음
+  const doWithdraw = async () => {
+    if (!window.confirm('정말 탈퇴하시겠어요? 모든 할 일, 카테고리, 메모, 타이머 기록이 영구적으로 삭제되고 되돌릴 수 없어요.')) return;
+    if (!window.confirm('한 번 더 확인할게요. 정말 탈퇴할까요?')) return;
+    setWithdrawing(true);
+    try {
+      await axios.delete(`${API}/account`);
+      onWithdraw();
+    } catch (err) {
+      alert(errorMessage(err));
+    } finally {
+      setWithdrawing(false);
+    }
+  };
+
+  const startEdit = () => {
+    setNewName(user.nickname);
+    setNameError('');
+    setEditingName(true);
+  };
+
+  const saveName = async () => {
+    const trimmed = newName.trim();
+    if (!trimmed) { setNameError('닉네임을 입력해 주세요.'); return; }
+    if (trimmed === user.nickname) { setEditingName(false); return; }
+    setSaving(true);
+    setNameError('');
+    try {
+      const res = await axios.patch(`${API}/account/nickname`, { newNickname: trimmed });
+      onNicknameChanged(res.data.nickname, res.data.token);
+      setEditingName(false);
+    } catch (err) {
+      setNameError(errorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+      <>
+      {cropFile && <PhotoCropModal file={cropFile} onCancel={handleCropCancel} onConfirm={handleCropConfirm}/>}
+      <div onClick={onClose} style={{position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.35)', zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center'}}>
+        <div onClick={e => e.stopPropagation()} style={{width: '100%', maxWidth: 480, maxHeight: '80vh', overflowY: 'auto', background: C.white, borderRadius: '24px 24px 0 0', padding: '16px 24px 32px', boxSizing: 'border-box'}}>
+          <div style={{width: 36, height: 4, background: C.border, borderRadius: 2, margin: '0 auto 16px'}}/>
+          <div style={{display: 'flex', alignItems: 'center', gap: 6, fontSize: 15, fontWeight: 700, color: C.pink, marginBottom: 14}}><Icon name="settings" size={24}/> 설정</div>
+
+          {/* 프로필 카드 */}
+          <div style={{display: 'flex', alignItems: 'center', gap: 14, background: 'linear-gradient(135deg, #FFD6E7, #E8D5FF)', borderRadius: 18, padding: '18px 16px', marginBottom: 8}}>
+            <button onClick={() => setShowAvatarPicker(v => !v)}
+                    style={{width: AVATAR_CARD_PX[user.avatarSize || 'medium'] + 18, height: AVATAR_CARD_PX[user.avatarSize || 'medium'] + 18, borderRadius: (AVATAR_CARD_PX[user.avatarSize || 'medium'] + 18) / 2, background: 'none', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0, cursor: 'pointer'}}>
+              <Avatar user={user} size={AVATAR_CARD_PX[user.avatarSize || 'medium']}/>
+            </button>
+            <div style={{flex: 1, minWidth: 0}}>
+              {!editingName ? (
+                  <>
+                    <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
+                      <div style={{fontSize: 16, fontWeight: 700, color: C.pinkDark}}>{user.nickname}</div>
+                      <button onClick={startEdit}
+                              style={{display: 'flex', alignItems: 'center', gap: 3, background: 'none', border: 'none', fontSize: 12, color: C.pinkDark, cursor: 'pointer', opacity: 0.75}}><Icon name="edit" size={11}/> 수정</button>
+                    </div>
+                    <div style={{fontSize: 12, color: C.pinkDark, opacity: 0.75, marginTop: 2}}>Todi 스터디 플래너</div>
+                  </>
+              ) : (
+                  <div>
+                    <input value={newName} maxLength={30} onChange={e => setNewName(e.target.value)}
+                           style={{width: '100%', padding: '8px 10px', borderRadius: 10, border: `1px solid ${C.pinkDark}`, fontSize: 14, marginBottom: 4, boxSizing: 'border-box'}}/>
+                    <div style={{display: 'flex', alignItems: 'flex-start', gap: 3, fontSize: 10, color: C.pinkDark, opacity: 0.75, marginBottom: 6}}>
+                      <Icon name="alert" size={10} color={C.pinkDark}/> 욕설·비방 등 부적절한 닉네임은 사용하지 말아주세요
+                    </div>
+                    <div style={{display: 'flex', gap: 6}}>
+                      <button onClick={() => setEditingName(false)} disabled={saving}
+                              style={{flex: 1, padding: '6px 0', borderRadius: 10, border: 'none', background: 'rgba(255,255,255,0.7)', color: C.pinkDark, fontSize: 12, cursor: 'pointer'}}>취소</button>
+                      <button onClick={saveName} disabled={saving}
+                              style={{flex: 1, padding: '6px 0', borderRadius: 10, border: 'none', background: C.pinkDark, color: 'white', fontSize: 12, fontWeight: 700, cursor: 'pointer'}}>{saving ? '저장 중...' : '저장'}</button>
+                    </div>
+                  </div>
+              )}
+            </div>
+          </div>
+          {nameError && <div style={{display: 'flex', alignItems: 'center', gap: 4, color: '#FF5252', fontSize: 12, marginBottom: 14}}><Icon name="alert" size={12} color="#FF5252"/> {nameError}</div>}
+
+          {showAvatarPicker && (
+              <div style={{marginBottom: 18, background: '#FFF5F9', borderRadius: 14, padding: 12}}>
+                <div style={{fontSize: 11, color: C.muted, fontWeight: 600, marginBottom: 6}}>아바타 크기</div>
+                <div style={{display: 'flex', gap: 8, marginBottom: 12}}>
+                  {[['small', '작게'], ['medium', '보통'], ['large', '크게']].map(([size, label]) => (
+                      <button key={size} onClick={() => onAvatarSizeChanged(size)}
+                              style={{flex: 1, padding: '8px 0', borderRadius: 10, border: (user.avatarSize || 'medium') === size ? `2px solid ${C.pinkDark}` : `1px solid ${C.border}`, background: 'white', color: C.pinkDark, fontSize: 12, fontWeight: 600, cursor: 'pointer'}}>
+                        {label}
+                      </button>
+                  ))}
+                </div>
+                <div style={{display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10}}>
+                  {AVATAR_EMOJIS.map(e => (
+                      <button key={e} onClick={() => pickAvatar(e)}
+                              style={{width: 38, height: 38, borderRadius: 19, border: (user.avatarType !== 'photo' && (user.avatarEmoji || '🐈‍⬛') === e) ? `2px solid ${C.pinkDark}` : `1px solid ${C.border}`, background: 'white', fontSize: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                        {e}
+                      </button>
+                  ))}
+                </div>
+                <input ref={photoInputRef} type="file" accept="image/*" style={{display: 'none'}} onChange={handlePhotoFile}/>
+                <div style={{display: 'flex', gap: 8}}>
+                  <button onClick={() => photoInputRef.current && photoInputRef.current.click()} disabled={uploadingPhoto}
+                          style={{flex: 1, padding: '10px 0', borderRadius: 12, border: `1px solid ${C.border}`, background: 'white', color: C.pinkDark, fontSize: 12, fontWeight: 600, cursor: uploadingPhoto ? 'default' : 'pointer'}}>
+                    {uploadingPhoto ? '업로드 중...' : (<span style={{display: 'inline-flex', alignItems: 'center', gap: 4}}><Icon name="camera" size={13}/> 사진으로 설정</span>)}
+                  </button>
+                  {user.avatarType === 'photo' && (
+                      <button onClick={removePhoto}
+                              style={{flex: 1, padding: '10px 0', borderRadius: 12, border: `1px solid ${C.border}`, background: 'white', color: C.muted, fontSize: 12, cursor: 'pointer'}}>
+                        사진 삭제
+                      </button>
+                  )}
+                </div>
+                <div style={{display: 'flex', alignItems: 'flex-start', gap: 3, fontSize: 10, color: C.muted, marginTop: 8, lineHeight: 1.4}}>
+                  <Icon name="alert" size={10} color={C.muted}/> 선정적·폭력적이거나 타인에게 불쾌감을 줄 수 있는 사진은 올리지 말아주세요
+                </div>
+                {avatarError && <div style={{display: 'flex', alignItems: 'center', gap: 4, color: '#FF5252', fontSize: 12, marginTop: 8}}><Icon name="alert" size={12} color="#FF5252"/> {avatarError}</div>}
+              </div>
+          )}
+
+          <div style={{fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 8}}>상태메시지</div>
+          {!editingStatus ? (
+              <button onClick={() => { setNewStatus(user.statusMessage || ''); setEditingStatus(true); }}
+                      style={{width: '100%', textAlign: 'left', padding: '14px 16px', borderRadius: 14, border: `1px solid ${C.border}`, background: 'white', fontSize: 14, color: user.statusMessage ? C.text : C.muted, cursor: 'pointer', marginBottom: 18}}>
+                {user.statusMessage || (<span style={{display: 'inline-flex', alignItems: 'center', gap: 4}}>상태메시지를 입력해 보세요 <Icon name="edit" size={12}/></span>)}
+              </button>
+          ) : (
+              <div style={{marginBottom: 18}}>
+                <input value={newStatus} maxLength={40} placeholder="예: 오늘도 화이팅! 🔥"
+                       onChange={e => setNewStatus(e.target.value)}
+                       style={{...inp, marginBottom: 4}}/>
+                <div style={{display: 'flex', alignItems: 'flex-start', gap: 3, fontSize: 10, color: C.muted, marginBottom: 8}}>
+                  <Icon name="alert" size={10} color={C.muted}/> 욕설·비방 등 부적절한 문구는 사용하지 말아주세요
+                </div>
+                <div style={{display: 'flex', gap: 8}}>
+                  <button onClick={() => setEditingStatus(false)}
+                          style={{flex: 1, padding: 11, borderRadius: 12, border: `1px solid ${C.border}`, background: 'white', color: C.muted, fontSize: 13, cursor: 'pointer'}}>취소</button>
+                  <button onClick={saveStatus}
+                          style={{flex: 1, padding: 11, borderRadius: 12, border: 'none', background: `linear-gradient(135deg, ${C.pinkDark}, ${C.lavender})`, color: 'white', fontSize: 13, fontWeight: 700, cursor: 'pointer'}}>저장</button>
+                </div>
+              </div>
+          )}
+
+          <div style={{fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 8}}>계정</div>
+          <button onClick={doLogout}
+                  style={{width: '100%', textAlign: 'left', padding: '14px 16px', borderRadius: 14, border: `1px solid ${C.border}`, background: 'white', fontSize: 14, color: C.text, cursor: 'pointer', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 10}}>
+            <Icon name="logout" size={17} color={C.text}/> 로그아웃
+          </button>
+          <button onClick={doWithdraw} disabled={withdrawing}
+                  style={{width: '100%', textAlign: 'left', padding: '14px 16px', borderRadius: 14, border: `1px solid ${C.border}`, background: 'white', fontSize: 14, color: '#FF5252', cursor: withdrawing ? 'default' : 'pointer', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 10, opacity: withdrawing ? 0.6 : 1}}>
+            <Icon name="trash" size={17} color="#FF5252"/> {withdrawing ? '탈퇴 처리 중...' : '탈퇴하기'}
+          </button>
+
+          <div style={{textAlign: 'center', fontSize: 11, color: C.muted, marginTop: 20}}>Todi Study Planner</div>
+
+          <button onClick={onClose}
+                  style={{width: '100%', marginTop: 18, padding: 13, borderRadius: 14, border: `1px solid ${C.border}`, background: 'white', fontSize: 14, color: C.muted, cursor: 'pointer'}}>닫기</button>
+        </div>
+      </div>
+      </>
+  );
+}
+
+// 루틴(반복 일정)으로 표시된 할 일을 날짜 상관없이 한 눈에 모아보는 모달.
+// 체크박스는 "오늘" 완료했는지를 보여주고 토글함 (루틴은 날짜별로 완료 여부가 따로 저장되니까)
+function RoutineManager({ onClose }) {
+  const [routines, setRoutines] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const todayStr = getLocalDateStr();
+
+  const fetchRoutines = async () => {
+    try {
+      const [routinesRes, completionsRes] = await Promise.all([
+        axios.get(`${API}/todos/routines`),
+        axios.get(`${API}/todos/routine-completions`),
+      ]);
+      const doneTodaySet = new Set(
+          completionsRes.data.filter(c => c.date === todayStr).map(c => c.todoId)
+      );
+      setRoutines(routinesRes.data.map(t => ({...t, completed: doneTodaySet.has(t.id)})));
+    } catch (err) {
+      console.error('Failed to fetch routines:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchRoutines(); }, []);
+
+  const toggle = async (id) => {
+    try {
+      await axios.patch(`${API}/todos/${id}/complete`, null, { params: { date: todayStr } });
+      fetchRoutines();
+    } catch (err) {
+      console.error('Failed to toggle routine:', err);
+    }
+  };
+
+  const remove = async (id) => {
+    try {
+      await axios.delete(`${API}/todos/${id}`);
+      fetchRoutines();
+    } catch (err) {
+      console.error('Failed to delete routine:', err);
+    }
+  };
+
+  return (
+      <div onClick={onClose} style={{position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.35)', zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center'}}>
+        <div onClick={e => e.stopPropagation()} style={{width: '100%', maxWidth: 480, maxHeight: '80vh', overflowY: 'auto', background: C.white, borderRadius: '24px 24px 0 0', padding: '16px 24px 32px', boxSizing: 'border-box'}}>
+          <div style={{width: 36, height: 4, background: C.border, borderRadius: 2, margin: '0 auto 16px'}}/>
+          <div style={{display: 'flex', alignItems: 'center', gap: 6, fontSize: 15, fontWeight: 700, color: C.pink, marginBottom: 2}}><Icon name="repeat" size={16}/> 루틴 모아보기</div>
+          <div style={{fontSize: 11, color: C.muted, marginBottom: 12}}>체크는 오늘 기준으로 처리돼요</div>
+
+          {loading && <div style={{textAlign: 'center', padding: 20, color: C.muted}}>불러오는 중...</div>}
+
+          {!loading && routines.length === 0 && (
+              <div style={{textAlign: 'center', padding: 30, color: C.muted}}>
+                <div style={{display: 'flex', justifyContent: 'center', marginBottom: 8, opacity: 0.5}}><Icon name="repeat" size={32} color={C.muted}/></div>
+                <div>아직 루틴으로 표시한 할 일이 없어요</div>
+                <div style={{fontSize: 11, marginTop: 4}}>할 일 추가할 때 "루틴으로 표시"를 체크해 보세요</div>
+              </div>
+          )}
+
+          {routines.map(todo => (
+              <TodoCard key={todo.id} todo={todo} onToggle={toggle} onDelete={remove}/>
+          ))}
+
+          <button onClick={onClose}
+                  style={{width: '100%', marginTop: 18, padding: 13, borderRadius: 14, border: `1px solid ${C.border}`, background: 'white', fontSize: 14, color: C.muted, cursor: 'pointer'}}>닫기</button>
+        </div>
       </div>
   );
 }
@@ -407,16 +1251,8 @@ function CategoryManager({ categories, onClose, onChanged }) {
       <div onClick={onClose} style={{position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.35)', zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center'}}>
         <div onClick={e => e.stopPropagation()} style={{width: '100%', maxWidth: 480, maxHeight: '80vh', overflowY: 'auto', background: C.white, borderRadius: '24px 24px 0 0', padding: '16px 24px 32px', boxSizing: 'border-box'}}>
           <div style={{width: 36, height: 4, background: C.border, borderRadius: 2, margin: '0 auto 16px'}}/>
-          <div style={{fontSize: 15, fontWeight: 700, color: C.pink, marginBottom: 14}}>🎨 카테고리 관리</div>
+          <div style={{display: 'flex', alignItems: 'center', gap: 6, fontSize: 15, fontWeight: 700, color: C.pink, marginBottom: 14}}><Icon name="palette" size={16}/> 카테고리 관리</div>
 
-          {categories.length === 0 && (
-              <div style={{fontSize: 13, color: C.muted, marginBottom: 12}}>아직 카테고리가 없어요. 아래에서 만들어 보세요!</div>
-          )}
-          {categories.map(c => (
-              <CategoryRow key={`${c.id}-${c.name}-${c.color}`} category={c} onSave={save} onRemove={remove}/>
-          ))}
-
-          <div style={{borderTop: `1px solid ${C.border}`, margin: '16px 0 12px'}}/>
           <div style={{fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 8}}>새 카테고리</div>
           <div style={{display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10}}>
             {CATEGORY_COLORS.map(col => (
@@ -424,7 +1260,7 @@ function CategoryManager({ categories, onClose, onChanged }) {
                         style={{width: 26, height: 26, borderRadius: 13, background: col, cursor: 'pointer', border: newColor === col ? `3px solid ${C.text}` : '3px solid transparent'}}/>
             ))}
             <input type="color" value={newColor} onChange={e => setNewColor(e.target.value)}
-                   style={{width: 30, height: 30, border: 'none', padding: 0, background: 'none', cursor: 'pointer'}}/>
+                   style={{width: 30, height: 30, borderRadius: 8, overflow: 'hidden', border: 'none', padding: 0, background: 'none', cursor: 'pointer'}}/>
           </div>
           <div style={{display: 'flex', gap: 8}}>
             <input placeholder="카테고리 이름" value={newName} maxLength={30}
@@ -434,7 +1270,16 @@ function CategoryManager({ categories, onClose, onChanged }) {
                     style={{padding: '0 18px', borderRadius: 12, border: 'none', background: `linear-gradient(135deg, ${C.pinkDark}, ${C.lavender})`, color: 'white', fontWeight: 700, cursor: 'pointer'}}>추가</button>
           </div>
 
-          {error && <div style={{color: '#FF5252', fontSize: 12, marginTop: 10}}>⚠️ {error}</div>}
+          {error && <div style={{display: 'flex', alignItems: 'center', gap: 4, color: '#FF5252', fontSize: 12, marginTop: 10}}><Icon name="alert" size={12} color="#FF5252"/> {error}</div>}
+
+          <div style={{borderTop: `1px solid ${C.border}`, margin: '16px 0 12px'}}/>
+
+          {categories.length === 0 && (
+              <div style={{fontSize: 13, color: C.muted, marginBottom: 12}}>아직 카테고리가 없어요. 위에서 만들어 보세요!</div>
+          )}
+          {categories.map(c => (
+              <CategoryRow key={`${c.id}-${c.name}-${c.color}`} category={c} onSave={save} onRemove={remove}/>
+          ))}
 
           <button onClick={onClose}
                   style={{width: '100%', marginTop: 18, padding: 13, borderRadius: 14, border: `1px solid ${C.border}`, background: 'white', fontSize: 14, color: C.muted, cursor: 'pointer'}}>닫기</button>
@@ -452,13 +1297,13 @@ function CategoryRow({ category, onSave, onRemove }) {
   return (
       <div style={{display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8}}>
         <input type="color" value={color} onChange={e => setColor(e.target.value)}
-               style={{width: 36, height: 36, border: 'none', padding: 0, background: 'none', cursor: 'pointer', flexShrink: 0}}/>
+               style={{width: 36, height: 36, borderRadius: 9, overflow: 'hidden', border: 'none', padding: 0, background: 'none', cursor: 'pointer', flexShrink: 0}}/>
         <input value={name} maxLength={30} onChange={e => setName(e.target.value)}
                style={{...inp, marginBottom: 0, flex: 1, width: 'auto', minWidth: 0}}/>
         <button disabled={!changed} onClick={() => onSave(category.id, name, color)}
                 style={{padding: '8px 12px', borderRadius: 10, border: 'none', background: changed ? C.pinkDark : C.border, color: changed ? 'white' : C.muted, fontSize: 12, fontWeight: 700, cursor: changed ? 'pointer' : 'default'}}>저장</button>
         <button onClick={() => onRemove(category.id)}
-                style={{background: 'none', border: 'none', color: C.muted, fontSize: 15, cursor: 'pointer', opacity: 0.6}}>🗑</button>
+                style={{background: 'none', border: 'none', color: C.muted, cursor: 'pointer', opacity: 0.6, display: 'flex'}}><Icon name="trash" size={16}/></button>
       </div>
   );
 }
@@ -473,7 +1318,79 @@ function MemoTab() {
   const [images, setImages] = useState([]);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [zoomScale, setZoomScale] = useState(1);
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const fileInputRef = useRef(null);
+  const pinchRef = useRef({ active: false, startDist: 0, startZoom: 1 });
+  const panRef = useRef({ active: false, startX: 0, startY: 0, startOffsetX: 0, startOffsetY: 0 });
+
+  const touchDist = (touches) => {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  const clampZoom = (z) => Math.max(1, Math.min(4, z));
+
+  const handleImageTouchStart = (e) => {
+    if (e.touches.length === 2) {
+      pinchRef.current = { active: true, startDist: touchDist(e.touches), startZoom: zoomScale };
+      panRef.current.active = false;
+    } else if (e.touches.length === 1 && zoomScale > 1) {
+      panRef.current = {
+        active: true,
+        startX: e.touches[0].clientX, startY: e.touches[0].clientY,
+        startOffsetX: panOffset.x, startOffsetY: panOffset.y
+      };
+    }
+  };
+
+  const handleImageTouchMove = (e) => {
+    if (e.touches.length === 2 && pinchRef.current.active) {
+      e.preventDefault();
+      const newDist = touchDist(e.touches);
+      const ratio = newDist / (pinchRef.current.startDist || newDist);
+      setZoomScale(clampZoom(pinchRef.current.startZoom * ratio));
+    } else if (e.touches.length === 1 && panRef.current.active) {
+      e.preventDefault();
+      const dx = e.touches[0].clientX - panRef.current.startX;
+      const dy = e.touches[0].clientY - panRef.current.startY;
+      setPanOffset({ x: panRef.current.startOffsetX + dx, y: panRef.current.startOffsetY + dy });
+    }
+  };
+
+  const handleImageTouchEnd = (e) => {
+    if (e.touches.length < 2) pinchRef.current.active = false;
+    if (e.touches.length < 1) panRef.current.active = false;
+    if (zoomScale <= 1) setPanOffset({ x: 0, y: 0 });
+  };
+
+  const handleImageWheel = (e) => {
+    e.preventDefault();
+    const delta = e.deltaY < 0 ? 0.15 : -0.15;
+    setZoomScale(z => {
+      const next = clampZoom(z + delta);
+      if (next <= 1) setPanOffset({ x: 0, y: 0 });
+      return next;
+    });
+  };
+
+  // 브라우저가 터치/휠 리스너를 기본 passive로 붙이면 preventDefault가 무시되고 콘솔 경고가 뜨므로,
+  // 라이트박스 이미지에는 passive:false 네이티브 리스너를 직접 달아준다.
+  const lightboxImgRef = useRef(null);
+  useEffect(() => {
+    const el = lightboxImgRef.current;
+    if (!el) return;
+    el.addEventListener('touchstart', handleImageTouchStart, { passive: false });
+    el.addEventListener('touchmove', handleImageTouchMove, { passive: false });
+    el.addEventListener('touchend', handleImageTouchEnd, { passive: false });
+    el.addEventListener('wheel', handleImageWheel, { passive: false });
+    return () => {
+      el.removeEventListener('touchstart', handleImageTouchStart);
+      el.removeEventListener('touchmove', handleImageTouchMove);
+      el.removeEventListener('touchend', handleImageTouchEnd);
+      el.removeEventListener('wheel', handleImageWheel);
+    };
+  }, [previewUrl, zoomScale, panOffset]);
 
   const fetchMemos = async () => {
     try {
@@ -629,6 +1546,7 @@ function MemoTab() {
   const closeLightbox = () => {
     setPreviewUrl(null);
     setZoomScale(1);
+    setPanOffset({ x: 0, y: 0 });
   };
 
   if (showEditor) {
@@ -647,7 +1565,7 @@ function MemoTab() {
 
           {/* 이미지 업로드 버튼 */}
           <button onClick={() => fileInputRef.current.click()} style={{display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: 12, border: `1.5px dashed ${C.border}`, background: 'transparent', color: C.pink, fontSize: 13, cursor: 'pointer', marginTop: 12, marginBottom: 16}}>
-            📷 사진 추가
+            <Icon name="camera" size={15}/> 사진 추가
           </button>
           <input ref={fileInputRef} type="file" accept="image/*" style={{display: 'none'}} onChange={uploadImage}/>
 
@@ -663,6 +1581,7 @@ function MemoTab() {
                             const activeSrc = e.currentTarget.querySelector('img')?.src || src;
                             setPreviewUrl({ url: activeSrc, fallbackUrl: img.fallbackUrl });
                             setZoomScale(1);
+                            setPanOffset({ x: 0, y: 0 });
                           }}
                           style={{position: 'relative', borderRadius: 10, overflow: 'hidden', aspectRatio: '1', cursor: 'pointer'}}
                       >
@@ -721,21 +1640,26 @@ function MemoTab() {
                           e.currentTarget.src = previewUrl.fallbackUrl;
                         }
                       }}
-                      onClick={(e) => {
+                      ref={lightboxImgRef}
+                      onClick={(e) => e.stopPropagation()}
+                      onDoubleClick={(e) => {
                         e.stopPropagation();
-                        setZoomScale(prev => prev === 1 ? 1.5 : 1);
+                        if (zoomScale > 1) { setZoomScale(1); setPanOffset({ x: 0, y: 0 }); }
+                        else setZoomScale(2);
                       }}
                       style={{
                         maxHeight: '80vh', maxWidth: '90vw', borderRadius: 16,
                         objectFit: 'contain',
                         boxShadow: '0 20px 50px rgba(0,0,0,0.6)',
-                        transform: `scale(${zoomScale})`,
-                        transition: 'transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-                        cursor: zoomScale === 1 ? 'zoom-in' : 'zoom-out'
+                        transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomScale})`,
+                        transition: pinchRef.current.active || panRef.current.active ? 'none' : 'transform 0.2s ease',
+                        touchAction: 'none',
+                        cursor: zoomScale > 1 ? 'grab' : 'zoom-in',
+                        userSelect: 'none'
                       }}
                   />
-                  <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, marginTop: 14, fontWeight: 500 }}>
-                    🔍 이미지를 클릭하면 확대/축소됩니다 • 바깥을 누르면 닫힙니다
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'rgba(255,255,255,0.7)', fontSize: 12, marginTop: 14, fontWeight: 500 }}>
+                    <Icon name="search" size={12} color="rgba(255,255,255,0.7)"/> 두 손가락으로 벌려서 확대/축소 • 확대 후 드래그로 이동 • 바깥을 누르면 닫힙니다
                   </div>
                 </div>
               </div>
@@ -746,15 +1670,20 @@ function MemoTab() {
 
   return (
       <div style={{paddingTop: 8}}>
-        <input placeholder="🔍 메모 검색" value={search} onChange={e => setSearch(e.target.value)}
-               style={{...inp, marginBottom: 12}}/>
+        <div style={{position: 'relative', marginBottom: 12}}>
+          <div style={{position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: C.muted, display: 'flex', pointerEvents: 'none'}}><Icon name="search" size={15}/></div>
+          <input placeholder="메모 검색" value={search} onChange={e => setSearch(e.target.value)}
+                 style={{...inp, paddingLeft: 36}}/>
+        </div>
         <button onClick={openNew} style={{width: '100%', padding: 14, borderRadius: 14, border: `2px dashed ${C.border}`, background: 'transparent', color: C.pink, fontSize: 14, fontWeight: 600, cursor: 'pointer', marginBottom: 16}}>
           + 새 메모 작성
         </button>
         {filtered.length === 0 && (
             <div style={{textAlign: 'center', padding: 30, color: C.muted}}>
-              <div style={{fontSize: 36, marginBottom: 8}}>📝</div>
-              <div>메모가 없어요!</div>
+              <div style={{marginBottom: 8, display: 'flex', justifyContent: 'center'}}>
+                <Icon name={search ? 'search' : 'note'} size={36} color={C.pink} strokeWidth={1.5}/>
+              </div>
+              <div>{search ? '검색 결과가 없어요' : '메모가 없어요!'}</div>
             </div>
         )}
         {filtered.map(memo => (
@@ -763,12 +1692,36 @@ function MemoTab() {
               {memo.content && <div style={{fontSize: 13, color: C.muted, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical'}}>{memo.content}</div>}
               <div style={{fontSize: 11, color: C.muted, marginTop: 8}}>{formatDate(memo.updatedAt)}</div>
               <button onClick={e => { e.stopPropagation(); deleteMemo(memo.id); }}
-                      style={{position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', color: C.muted, fontSize: 14, cursor: 'pointer', opacity: 0.5}}>🗑</button>
+                      style={{position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', color: C.muted, cursor: 'pointer', opacity: 0.5, display: 'flex'}}><Icon name="trash" size={14}/></button>
             </div>
         ))}
       </div>
   );
 }
+
+// 대한민국 법정공휴일 (대체공휴일 포함, 2025~2027년) - "MM-DD" 단위가 아니라 연도별로 정확히 관리
+const HOLIDAYS_KR = {
+  // 2025
+  '2025-01-01': '신정', '2025-01-28': '설날연휴', '2025-01-29': '설날', '2025-01-30': '설날연휴',
+  '2025-03-01': '삼일절', '2025-03-03': '대체공휴일', '2025-05-05': '어린이날·부처님오신날',
+  '2025-05-06': '대체공휴일', '2025-06-06': '현충일', '2025-08-15': '광복절', '2025-10-03': '개천절',
+  '2025-10-05': '추석연휴', '2025-10-06': '추석', '2025-10-07': '추석연휴', '2025-10-08': '대체공휴일',
+  '2025-10-09': '한글날', '2025-12-25': '크리스마스',
+  // 2026
+  '2026-01-01': '신정', '2026-02-16': '설날연휴', '2026-02-17': '설날', '2026-02-18': '설날연휴',
+  '2026-03-01': '삼일절', '2026-03-02': '대체공휴일', '2026-05-05': '어린이날', '2026-05-08': '부처님오신날',
+  '2026-06-06': '현충일', '2026-08-15': '광복절', '2026-08-17': '대체공휴일', '2026-09-24': '추석연휴',
+  '2026-09-25': '추석', '2026-09-26': '추석연휴', '2026-09-27': '추석연휴', '2026-10-03': '개천절',
+  '2026-10-05': '대체공휴일', '2026-10-09': '한글날', '2026-12-25': '크리스마스',
+  // 2027
+  '2027-01-01': '신정', '2027-02-06': '설날연휴', '2027-02-07': '설날', '2027-02-08': '설날연휴',
+  '2027-02-09': '대체공휴일', '2027-03-01': '삼일절', '2027-05-05': '어린이날', '2027-05-13': '부처님오신날',
+  '2027-06-06': '현충일', '2027-08-15': '광복절', '2027-08-16': '대체공휴일', '2027-09-14': '추석연휴',
+  '2027-09-15': '추석', '2027-09-16': '추석연휴', '2027-10-03': '개천절', '2027-10-04': '대체공휴일',
+  '2027-10-09': '한글날', '2027-10-11': '대체공휴일', '2027-12-25': '크리스마스', '2027-12-27': '대체공휴일',
+};
+const HOLIDAY_RED = '#FF5252';
+const SATURDAY_BLUE = '#4C7EFF';
 
 function CalendarView({ selectedDate, onSelect, todos }) {
   const [current, setCurrent] = useState(new Date());
@@ -776,11 +1729,11 @@ function CalendarView({ selectedDate, onSelect, todos }) {
   const month = current.getMonth();
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getLocalDateStr();
 
   const hasTodo = (day) => {
     const d = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-    return todos.some(t => t.dueDate === d);
+    return todos.some(t => t.dueDate === d || (t.isRoutine && t.dueDate <= d));
   };
 
   const selectDay = (day) => {
@@ -796,8 +1749,8 @@ function CalendarView({ selectedDate, onSelect, todos }) {
           <button onClick={() => setCurrent(new Date(year, month+1))} style={{background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: C.muted}}>›</button>
         </div>
         <div style={{display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, textAlign: 'center'}}>
-          {['일','월','화','수','목','금','토'].map(d => (
-              <div key={d} style={{fontSize: 10, color: C.muted, padding: '4px 0'}}>{d}</div>
+          {['일','월','화','수','목','금','토'].map((d, idx) => (
+              <div key={d} style={{fontSize: 10, color: idx === 0 ? HOLIDAY_RED : idx === 6 ? SATURDAY_BLUE : C.muted, padding: '4px 0', fontWeight: idx === 0 || idx === 6 ? 700 : 400}}>{d}</div>
           ))}
           {Array(firstDay).fill(null).map((_, i) => <div key={`e${i}`}/>)}
           {Array(daysInMonth).fill(null).map((_, i) => {
@@ -806,14 +1759,24 @@ function CalendarView({ selectedDate, onSelect, todos }) {
             const isToday = dateStr === todayStr;
             const isSelected = dateStr === selectedDate;
             const hasT = hasTodo(day);
+            const dow = (firstDay + i) % 7;
+            const holidayName = HOLIDAYS_KR[dateStr];
+            const isHoliday = Boolean(holidayName) || dow === 0;
+            const isSaturday = dow === 6;
+            const dayColor = isSelected ? 'white' : isToday ? C.pinkDark : isHoliday ? HOLIDAY_RED : isSaturday ? SATURDAY_BLUE : C.text;
             return (
                 <button key={day} onClick={() => selectDay(day)} style={{
-                  padding: '6px 0', borderRadius: 10, border: 'none', cursor: 'pointer', position: 'relative',
+                  padding: '6px 2px', borderRadius: 10, border: 'none', cursor: 'pointer', position: 'relative',
                   background: isSelected ? `linear-gradient(135deg, ${C.pinkDark}, ${C.lavender})` : isToday ? '#FFE4F0' : 'transparent',
-                  color: isSelected ? 'white' : isToday ? C.pinkDark : C.text,
-                  fontSize: 13, fontWeight: isToday || isSelected ? 700 : 400
+                  color: dayColor, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', gap: 1,
+                  fontSize: 13, fontWeight: isToday || isSelected || isHoliday || isSaturday ? 700 : 400, minHeight: holidayName ? 40 : 'auto'
                 }}>
-                  {day}
+                  <span>{day}</span>
+                  {holidayName && (
+                      <span style={{fontSize: 8, fontWeight: 600, lineHeight: 1.1, color: isSelected ? 'rgba(255,255,255,0.9)' : HOLIDAY_RED, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
+                        {holidayName}
+                      </span>
+                  )}
                   {hasT && <div style={{position: 'absolute', bottom: 2, left: '50%', transform: 'translateX(-50%)', width: 4, height: 4, borderRadius: 2, background: isSelected ? 'white' : C.pink}}/>}
                 </button>
             );
@@ -823,6 +1786,166 @@ function CalendarView({ selectedDate, onSelect, todos }) {
   );
 }
 
+// 공부 시간 통계 (일별/주별/월별)
+function TimerStatsModal({ onClose }) {
+  const [range, setRange] = useState('day'); // 'day' | 'week' | 'month'
+  const [bars, setBars] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [totalLabel, setTotalLabel] = useState('');
+  const [refreshTick, setRefreshTick] = useState(0);
+
+  const fmtH = (totalSec) => {
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    if (h > 0) return m > 0 ? `${h}시간 ${m}분` : `${h}시간`;
+    if (m > 0) return s > 0 ? `${m}분 ${s}초` : `${m}분`;
+    return `${s}초`;
+  };
+
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const toStr = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      try {
+        const today = new Date();
+        let start, end, buckets, keyOf;
+
+        if (range === 'day') {
+          end = new Date(today);
+          start = new Date(today);
+          start.setDate(start.getDate() - 6);
+          buckets = [];
+          for (let i = 0; i < 7; i++) {
+            const d = new Date(start);
+            d.setDate(d.getDate() + i);
+            buckets.push({ key: toStr(d), label: `${d.getMonth() + 1}/${d.getDate()}`, seconds: 0 });
+          }
+          keyOf = (dateStr) => dateStr;
+        } else if (range === 'week') {
+          end = new Date(today);
+          const weekStart = new Date(today);
+          weekStart.setDate(weekStart.getDate() - weekStart.getDay() - 7 * 5);
+          start = weekStart;
+          buckets = [];
+          for (let i = 0; i < 6; i++) {
+            const d = new Date(weekStart);
+            d.setDate(d.getDate() + i * 7);
+            const key = toStr(d);
+            buckets.push({ key, label: `${d.getMonth() + 1}/${d.getDate()}주`, seconds: 0, weekStartDate: d });
+          }
+          keyOf = (dateStr) => {
+            const dt = new Date(dateStr + 'T00:00:00');
+            let best = buckets[0].key;
+            for (const b of buckets) {
+              if (b.weekStartDate <= dt) best = b.key;
+            }
+            return best;
+          };
+        } else {
+          end = new Date(today);
+          start = new Date(today.getFullYear(), today.getMonth() - 5, 1);
+          buckets = [];
+          for (let i = 0; i < 6; i++) {
+            const d = new Date(today.getFullYear(), today.getMonth() - 5 + i, 1);
+            const key = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+            buckets.push({ key, label: `${d.getMonth() + 1}월`, seconds: 0 });
+          }
+          keyOf = (dateStr) => dateStr.slice(0, 7);
+        }
+
+        const res = await axios.get(`${API}/timer/stats/range`, {
+          params: { start: toStr(start), end: toStr(end), _: Date.now() }, // 캐시 방지: 항상 최신 데이터를 받아오도록
+          headers: { 'Cache-Control': 'no-cache' }
+        });
+
+        const byKey = {};
+        buckets.forEach(b => { byKey[b.key] = b; });
+
+        (res.data || []).forEach(row => {
+          const k = keyOf(row.date);
+          if (byKey[k]) byKey[k].seconds += row.totalSeconds || 0;
+        });
+
+        if (!cancelled) {
+          setBars(buckets);
+          const total = buckets.reduce((sum, b) => sum + b.seconds, 0);
+          setTotalLabel(fmtH(total));
+        }
+      } catch (err) {
+        console.error('Failed to fetch timer stats:', err);
+        if (!cancelled) { setBars([]); setTotalLabel('0분'); }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [range, refreshTick]);
+
+  const maxSeconds = Math.max(1, ...bars.map(b => b.seconds));
+
+  return (
+      <div onClick={onClose} style={{position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.35)', zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center'}}>
+        <div onClick={e => e.stopPropagation()} style={{width: '100%', maxWidth: 480, maxHeight: '80vh', overflowY: 'auto', background: C.white, borderRadius: '24px 24px 0 0', padding: '16px 24px 32px', boxSizing: 'border-box'}}>
+          <div style={{width: 36, height: 4, background: C.border, borderRadius: 2, margin: '0 auto 16px'}}/>
+          <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14}}>
+            <div style={{display: 'flex', alignItems: 'center', gap: 6, fontSize: 15, fontWeight: 700, color: C.pink}}><Icon name="chart" size={16}/> 공부 시간 통계</div>
+            <button onClick={() => setRefreshTick(t => t + 1)} disabled={loading}
+                    style={{background: 'none', border: 'none', color: C.pinkDark, cursor: loading ? 'default' : 'pointer', opacity: loading ? 0.4 : 0.85, display: 'flex'}}
+                    title="새로고침"><Icon name="repeat" size={16}/></button>
+          </div>
+
+          <div style={{display: 'flex', gap: 6, marginBottom: 18}}>
+            {[['day', '일별'], ['week', '주별'], ['month', '월별']].map(([key, label]) => (
+                <button key={key} onClick={() => setRange(key)}
+                        style={{flex: 1, padding: '9px 0', borderRadius: 12, border: `1px solid ${range === key ? C.pinkDark : C.border}`, background: range === key ? C.pinkDark : 'white', color: range === key ? 'white' : C.muted, fontSize: 13, fontWeight: 700, cursor: 'pointer'}}>
+                  {label}
+                </button>
+            ))}
+          </div>
+
+          {loading && <div style={{textAlign: 'center', padding: 30, color: C.muted}}>불러오는 중...</div>}
+
+          {!loading && (
+              <>
+                <div style={{textAlign: 'center', marginBottom: 20}}>
+                  <div style={{fontSize: 11, color: C.muted, marginBottom: 4}}>
+                    {range === 'day' ? '최근 7일' : range === 'week' ? '최근 6주' : '최근 6개월'} 총 집중 시간
+                  </div>
+                  <div style={{fontSize: 22, fontWeight: 800, color: C.pinkDark}}>{totalLabel}</div>
+                </div>
+
+                <div style={{display: 'flex', alignItems: 'flex-end', gap: 8, height: 140, padding: '0 4px', marginBottom: 10}}>
+                  {bars.map((b) => (
+                      <div key={b.key} style={{flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, height: '100%', justifyContent: 'flex-end'}}>
+                        <div style={{fontSize: 10, color: C.muted, fontWeight: 600}}>{b.seconds > 0 ? fmtH(b.seconds) : ''}</div>
+                        <div style={{width: '100%', maxWidth: 34, height: `${Math.max(4, (b.seconds / maxSeconds) * 100)}px`, borderRadius: 8, background: b.seconds > 0 ? `linear-gradient(180deg, ${C.pinkLight}, ${C.pinkDark})` : C.border, transition: 'height 0.3s'}}/>
+                        <div style={{fontSize: 10, color: C.muted}}>{b.label}</div>
+                      </div>
+                  ))}
+                </div>
+
+                {bars.every(b => b.seconds === 0) && (
+                    <div style={{textAlign: 'center', padding: 10, color: C.muted, fontSize: 12}}>
+                      아직 기록된 공부 시간이 없어요
+                    </div>
+                )}
+              </>
+          )}
+
+          <button onClick={onClose}
+                  style={{width: '100%', marginTop: 18, padding: 13, borderRadius: 14, border: `1px solid ${C.border}`, background: 'white', fontSize: 14, color: C.muted, cursor: 'pointer'}}>닫기</button>
+        </div>
+      </div>
+  );
+}
+
+const TIMER_SESSION_KEY = 'todi_timer_session';
+
 function TimerTab() {
   const [subject, setSubject] = useState('');
   const [seconds, setSeconds] = useState(0);
@@ -830,36 +1953,96 @@ function TimerTab() {
   const [mode, setMode] = useState('focus');
   const [timerId, setTimerId] = useState(null);
   const [records, setRecords] = useState([]);
+  const [showStats, setShowStats] = useState(false);
   const intervalRef = useRef(null);
+  const startTimeRef = useRef(null);
 
-  const start = async () => {
-    if (!subject.trim()) return;
+  // 진행 중인 타이머를 시작 시각 기준으로 다시 계산 (백그라운드에 있다 돌아와도 정확한 경과 시간 표시)
+  const syncSeconds = () => {
+    if (startTimeRef.current) {
+      setSeconds(Math.floor((Date.now() - startTimeRef.current) / 1000));
+    }
+  };
+
+  // 앱을 새로고침하거나 백그라운드에서 돌아왔을 때, 진행 중이던 타이머를 복원
+  useEffect(() => {
     try {
-      const res = await axios.post(`${API}/timer/start`, { subject });
+      const saved = localStorage.getItem(TIMER_SESSION_KEY);
+      if (saved) {
+        const session = JSON.parse(saved);
+        setSubject(session.subject || '');
+        setMode(session.mode || 'focus');
+        setTimerId(session.timerId || null);
+        startTimeRef.current = session.startTime;
+        setSeconds(Math.floor((Date.now() - session.startTime) / 1000));
+        setRunning(true);
+        intervalRef.current = setInterval(syncSeconds, 1000);
+      }
+    } catch (err) {
+      console.error('Failed to restore timer session:', err);
+    }
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') syncSeconds();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('focus', syncSeconds);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('focus', syncSeconds);
+      clearInterval(intervalRef.current);
+    };
+  }, []);
+
+  // subj/m을 명시적으로 받아서 시작 (state 업데이트를 기다리지 않고 바로 시작할 수 있도록 - 기록 다시 재생 기능에 사용)
+  const startWith = async (subj, m) => {
+    if (!subj.trim() || running) return;
+    try {
+      const res = await axios.post(`${API}/timer/start`, { subject: subj, mode: m === 'focus' ? 'FOCUS' : 'BREAK' });
+      const now = Date.now();
+      setSubject(subj);
+      setMode(m);
       setTimerId(res.data.id);
       setRunning(true);
       setSeconds(0);
-      intervalRef.current = setInterval(() => {
-        setSeconds(s => s + 1);
-      }, 1000);
+      startTimeRef.current = now;
+      localStorage.setItem(TIMER_SESSION_KEY, JSON.stringify({ subject: subj, mode: m, timerId: res.data.id, startTime: now }));
+      intervalRef.current = setInterval(syncSeconds, 1000);
     } catch (err) {
       console.error('Failed to start timer:', err);
     }
   };
 
+  const start = () => startWith(subject, mode);
+
+  // 지난 기록과 같은 과목/모드로 타이머 바로 다시 시작
+  const replay = (r) => startWith(r.subject, r.mode);
+
   const stop = async () => {
     clearInterval(intervalRef.current);
     setRunning(false);
     const endTime = new Date().toLocaleTimeString('ko-KR', {hour: '2-digit', minute: '2-digit'});
-    const duration = seconds;
+    const duration = startTimeRef.current ? Math.floor((Date.now() - startTimeRef.current) / 1000) : seconds;
     try {
-      if (timerId) await axios.patch(`${API}/timer/${timerId}/stop`);
+      // 화면에 표시된 시간(duration)을 그대로 보내서 통계에도 똑같이 반영되게 함
+      if (timerId) await axios.patch(`${API}/timer/${timerId}/stop`, { duration });
     } catch (err) {
       console.error('Failed to stop timer:', err);
     }
-    setRecords(prev => [{subject, duration, endTime, mode}, ...prev]);
+    localStorage.removeItem(TIMER_SESSION_KEY);
+    // 같은 과목/모드 기록이 이미 있으면 새로 쌓지 않고 하나로 합침 (다시 재생 후 종료 시)
+    // ids: 이 화면 한 줄이 실제로는 여러 개의 서버 기록(다시 재생해서 이어붙인 것)을 가리킬 수 있어서, 삭제할 때 전부 같이 지우기 위해 모아둠
+    setRecords(prev => {
+      const idx = prev.findIndex(r => r.subject === subject && r.mode === mode);
+      if (idx !== -1) {
+        const merged = { ...prev[idx], duration: prev[idx].duration + duration, endTime, ids: [...prev[idx].ids, timerId] };
+        return [merged, ...prev.filter((_, i) => i !== idx)];
+      }
+      return [{subject, duration, endTime, mode, ids: [timerId]}, ...prev];
+    });
     setSeconds(0);
     setTimerId(null);
+    startTimeRef.current = null;
   };
 
   const switchMode = (m) => {
@@ -868,8 +2051,24 @@ function TimerTab() {
     setSeconds(0);
   };
 
-  const deleteRecord = (i) => {
+  // 화면 목록에서만 지우면 통계(서버 합계)에는 계속 남아있으므로, 실제로 서버 기록도 같이 삭제
+  const deleteRecord = async (i) => {
+    const target = records[i];
+    try {
+      await Promise.all((target.ids || []).map(id => axios.delete(`${API}/timer/${id}`)));
+    } catch (err) {
+      console.error('Failed to delete study record:', err);
+    }
     setRecords(prev => prev.filter((_, idx) => idx !== i));
+  };
+
+  const clearAllRecords = async () => {
+    try {
+      await Promise.all(records.flatMap(r => (r.ids || []).map(id => axios.delete(`${API}/timer/${id}`))));
+    } catch (err) {
+      console.error('Failed to delete study records:', err);
+    }
+    setRecords([]);
   };
 
   const mm = String(Math.floor(seconds / 60)).padStart(2, '0');
@@ -887,9 +2086,9 @@ function TimerTab() {
   return (
       <div style={{paddingTop: 16}}>
         <div style={{display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 24}}>
-          {[['focus','🎯 집중'], ['break','☕ 휴식']].map(([m, label]) => (
-              <button key={m} onClick={() => switchMode(m)} style={{padding: '8px 20px', borderRadius: 20, border: 'none', background: mode === m ? `linear-gradient(135deg, ${C.pinkDark}, ${C.lavender})` : C.border, color: mode === m ? 'white' : C.muted, fontWeight: mode === m ? 700 : 400, cursor: running ? 'not-allowed' : 'pointer', opacity: running && mode !== m ? 0.4 : 1}}>
-                {label}
+          {[['focus','target','집중'], ['break','coffee','휴식']].map(([m, icon, label]) => (
+              <button key={m} onClick={() => switchMode(m)} style={{display: 'flex', alignItems: 'center', gap: 6, padding: '8px 20px', borderRadius: 20, border: 'none', background: mode === m ? `linear-gradient(135deg, ${C.pinkDark}, ${C.lavender})` : C.border, color: mode === m ? 'white' : C.muted, fontWeight: mode === m ? 700 : 400, cursor: running ? 'not-allowed' : 'pointer', opacity: running && mode !== m ? 0.4 : 1}}>
+                <Icon name={icon} size={15}/> {label}
               </button>
           ))}
         </div>
@@ -899,31 +2098,41 @@ function TimerTab() {
           <div style={{fontSize: 56, fontWeight: 800, letterSpacing: 4, background: `linear-gradient(135deg, ${C.pinkDark}, ${C.lavender})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', marginBottom: 8}}>
             {hh > 0 && `${String(hh).padStart(2,'0')}:`}{mm}:{ss}
           </div>
-          {subject && <div style={{fontSize: 13, color: C.muted}}>📖 {subject}</div>}
+          {subject && <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, fontSize: 13, color: C.muted}}><Icon name="book" size={13}/> {subject}</div>}
         </div>
 
-        <input placeholder="무슨 과목 공부할까요? 🐱" value={subject} onChange={e => setSubject(e.target.value)}
+        <input placeholder="무슨 과목 공부할까요?" value={subject} onChange={e => setSubject(e.target.value)}
                disabled={running} style={{...inp, opacity: running ? 0.5 : 1}}/>
 
         <button onClick={running ? stop : start} style={{width: '100%', padding: '14px', borderRadius: 16, border: 'none', background: running ? '#FF5252' : `linear-gradient(135deg, ${C.pinkDark}, ${C.lavender})`, color: 'white', fontSize: 16, fontWeight: 700, cursor: 'pointer', boxShadow: `0 4px 20px rgba(255,92,138,0.3)`, marginBottom: 20}}>
           {running ? '⏹ 공부 종료' : '▶ 공부 시작'}
         </button>
 
+        <button onClick={() => setShowStats(true)}
+                style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, width: '100%', padding: '11px 0', borderRadius: 14, border: `1px solid ${C.border}`, background: 'white', color: C.pinkDark, fontSize: 13, fontWeight: 600, cursor: 'pointer', marginBottom: 20}}>
+          <Icon name="chart" size={15}/> 공부 시간 통계
+        </button>
+
+        {showStats && <TimerStatsModal onClose={() => setShowStats(false)}/>}
+
         {records.length > 0 && (
             <div>
               <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8}}>
-                <div style={{fontSize: 12, color: C.muted, fontWeight: 600}}>오늘 공부 기록 📝</div>
-                <button onClick={() => setRecords([])} style={{background: 'none', border: 'none', fontSize: 11, color: C.muted, cursor: 'pointer'}}>전체 삭제</button>
+                <div style={{display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: C.muted, fontWeight: 600}}><Icon name="note" size={12}/> 오늘 공부 기록</div>
+                <button onClick={clearAllRecords} style={{background: 'none', border: 'none', fontSize: 11, color: C.muted, cursor: 'pointer'}}>전체 삭제</button>
               </div>
               {records.map((r, i) => (
                   <div key={i} style={{background: C.card, borderRadius: 12, padding: '12px 14px', marginBottom: 8, border: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
                     <div>
-                      <div style={{fontSize: 13, fontWeight: 600, color: C.text}}>{r.mode === 'focus' ? '🎯' : '☕'} {r.subject}</div>
+                      <div style={{display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, fontWeight: 600, color: C.text}}><Icon name={r.mode === 'focus' ? 'target' : 'coffee'} size={13}/> {r.subject}</div>
                       <div style={{fontSize: 11, color: C.muted, marginTop: 2}}>{formatDuration(r.duration)}</div>
                     </div>
                     <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
                       <div style={{fontSize: 11, color: C.muted}}>{r.endTime} 종료</div>
-                      <button onClick={() => deleteRecord(i)} style={{background: 'none', border: 'none', color: C.muted, fontSize: 13, cursor: 'pointer', opacity: 0.5}}>🗑</button>
+                      <button onClick={() => replay(r)} disabled={running}
+                              style={{background: 'none', border: 'none', color: running ? C.border : C.pinkDark, cursor: running ? 'not-allowed' : 'pointer', opacity: running ? 0.5 : 0.85, display: 'flex'}}
+                              title="같은 과목으로 다시 시작"><Icon name="play" size={14}/></button>
+                      <button onClick={() => deleteRecord(i)} style={{background: 'none', border: 'none', color: C.muted, cursor: 'pointer', opacity: 0.5, display: 'flex'}}><Icon name="trash" size={14}/></button>
                     </div>
                   </div>
               ))}
@@ -942,55 +2151,113 @@ const inp = {
 };
 
 function AuthScreen({ onLogin }) {
-  const [mode, setMode] = useState('login');
-  const [nickname, setNickname] = useState('');
+  const [mode, setMode] = useState('login'); // 'login' | 'signup'
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [nickname, setNickname] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const googleBtnRef = useRef(null);
+  const googleClientId = process.env.REACT_APP_GOOGLE_CLIENT_ID || '';
+  const kakaoClientId = process.env.REACT_APP_KAKAO_REST_KEY || '';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!nickname.trim() || !password.trim()) {
-      setError('닉네임과 비밀번호를 모두 입력해 주세요.');
+    if (!email.trim() || !password.trim() || (mode === 'signup' && !nickname.trim())) {
+      setError(mode === 'signup' ? '이메일, 비밀번호, 닉네임을 모두 입력해 주세요.' : '이메일과 비밀번호를 입력해 주세요.');
       return;
     }
 
-    const cleanNick = nickname.trim();
-
+    setLoading(true);
+    setError('');
     try {
-      try {
-        const endpoint = mode === 'login' ? `${API}/auth/login` : `${API}/auth/signup`;
-        const res = await axios.post(endpoint, { nickname: cleanNick, password });
-        if (res.data && res.data.nickname) {
-          onLogin(res.data);
-          return;
-        }
-      } catch (backendErr) {
-        // 백엔드 미구동 시 로컬 인증
-      }
-
-      const storedUsers = JSON.parse(localStorage.getItem('todi_registered_users') || '[]');
-
-      if (mode === 'signup') {
-        const existing = storedUsers.find(u => u.nickname === cleanNick);
-        if (existing) {
-          setError('이미 등록된 닉네임입니다.');
-          return;
-        }
-        const newUser = { id: Date.now(), nickname: cleanNick, password };
-        localStorage.setItem('todi_registered_users', JSON.stringify([...storedUsers, newUser]));
-        onLogin(newUser);
-      } else {
-        const found = storedUsers.find(u => u.nickname === cleanNick && u.password === password);
-        if (!found) {
-          setError('닉네임 또는 비밀번호가 올바르지 않습니다.');
-          return;
-        }
-        onLogin(found);
-      }
+      const endpoint = mode === 'login' ? `${API}/auth/login` : `${API}/auth/signup`;
+      const body = mode === 'login'
+          ? { email: email.trim(), password }
+          : { email: email.trim(), password, nickname: nickname.trim() };
+      const res = await axios.post(endpoint, body);
+      onLogin(res.data);
     } catch (err) {
-      setError('로그인 처리 중 오류가 발생했습니다.');
+      setError(errorMessage(err));
+    } finally {
+      setLoading(false);
     }
   };
+
+  // 구글 로그인 성공 시 구글이 넘겨준 idToken(credential)을 서버로 보내서 검증받음
+  const handleGoogleCredential = async (response) => {
+    setError('');
+    setLoading(true);
+    try {
+      const res = await axios.post(`${API}/auth/google`, { idToken: response.credential });
+      onLogin(res.data);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 구글 로그인 버튼: Google Identity Services 스크립트를 한 번만 불러와서 렌더링
+  useEffect(() => {
+    if (!googleClientId) return;
+
+    const renderButton = () => {
+      if (!window.google || !googleBtnRef.current) return;
+      window.google.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: handleGoogleCredential,
+      });
+      googleBtnRef.current.innerHTML = '';
+      window.google.accounts.id.renderButton(googleBtnRef.current, {
+        type: 'standard', theme: 'outline', size: 'large', width: 280, text: 'continue_with', locale: 'ko',
+      });
+    };
+
+    if (window.google && window.google.accounts) {
+      renderButton();
+      return;
+    }
+
+    const existing = document.getElementById('google-identity-script');
+    if (existing) {
+      existing.addEventListener('load', renderButton);
+      return () => existing.removeEventListener('load', renderButton);
+    }
+
+    const script = document.createElement('script');
+    script.id = 'google-identity-script';
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = renderButton;
+    document.body.appendChild(script);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [googleClientId]);
+
+  // 카카오 로그인 시작: 카카오 인증 페이지로 이동 (돌아올 때 이 페이지 주소로 다시 돌아옴)
+  const startKakaoLogin = () => {
+    const redirectUri = window.location.origin + window.location.pathname;
+    const url = `https://kauth.kakao.com/oauth/authorize?client_id=${encodeURIComponent(kakaoClientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code`;
+    window.location.href = url;
+  };
+
+  // 카카오 인증 페이지에서 돌아오면 주소에 ?code=... 가 붙어있음 -> 서버로 보내서 로그인 마무리
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    if (!code) return;
+    // 새로고침해도 같은 code로 다시 요청되지 않도록 주소를 바로 정리
+    window.history.replaceState({}, '', window.location.pathname);
+
+    const redirectUri = window.location.origin + window.location.pathname;
+    setLoading(true);
+    axios.post(`${API}/auth/kakao`, { code, redirectUri })
+        .then(res => onLogin(res.data))
+        .catch(err => setError(errorMessage(err)))
+        .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
       <div style={{
@@ -1006,8 +2273,24 @@ function AuthScreen({ onLogin }) {
         }}>
           <div style={{ fontSize: 44, marginBottom: 8 }}>🐈‍⬛</div>
           <div style={{ fontSize: 10, color: C.pinkDark, letterSpacing: 2, fontWeight: 700, marginBottom: 4 }}>PRIVATE STUDY PLANNER</div>
-          <div style={{ fontSize: 26, fontWeight: 800, background: `linear-gradient(135deg, ${C.pinkDark}, ${C.lavender})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', marginBottom: 6 }}>Todi</div>
-          <div style={{ fontSize: 13, color: C.muted, marginBottom: 24 }}>소수 지인 전용 비밀 공간 🐾</div>
+          <div style={{ fontSize: 26, fontWeight: 800, background: `linear-gradient(135deg, ${C.pinkDark}, ${C.lavender})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', marginBottom: 24 }}>Todi</div>
+
+          {(googleClientId || kakaoClientId) && (
+              <>
+                {googleClientId && <div ref={googleBtnRef} style={{ display: 'flex', justifyContent: 'center', marginBottom: kakaoClientId ? 10 : 16 }}/>}
+                {kakaoClientId && (
+                    <button type="button" onClick={startKakaoLogin}
+                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', maxWidth: 280, margin: '0 auto 16px', padding: '11px 0', borderRadius: 8, border: 'none', background: '#FEE500', color: '#191919', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                      💬 카카오로 계속하기
+                    </button>
+                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '4px 0 20px', color: C.muted, fontSize: 11 }}>
+                  <div style={{ flex: 1, height: 1, background: C.border }}/>
+                  또는
+                  <div style={{ flex: 1, height: 1, background: C.border }}/>
+                </div>
+              </>
+          )}
 
           <div style={{ display: 'flex', background: '#FFF0F5', borderRadius: 14, padding: 4, marginBottom: 20 }}>
             <button
@@ -1038,35 +2321,44 @@ function AuthScreen({ onLogin }) {
 
           <form onSubmit={handleSubmit}>
             <input
-                placeholder="닉네임 (예: 홍길동)"
-                value={nickname}
-                onChange={e => setNickname(e.target.value)}
+                type="email"
+                placeholder="이메일"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
                 style={{ ...inp, marginBottom: 12 }}
             />
+            {mode === 'signup' && (
+                <input
+                    placeholder="닉네임 (예: 홍길동)"
+                    value={nickname}
+                    onChange={e => setNickname(e.target.value)}
+                    style={{ ...inp, marginBottom: 12 }}
+                />
+            )}
             <input
                 type="password"
-                placeholder="비밀번호"
+                placeholder={mode === 'signup' ? '비밀번호 (6자 이상)' : '비밀번호'}
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 style={{ ...inp, marginBottom: 16 }}
             />
 
-            {error && <div style={{ color: '#FF5252', fontSize: 12, marginBottom: 14, fontWeight: 500 }}>⚠️ {error}</div>}
+            {error && <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#FF5252', fontSize: 12, marginBottom: 14, fontWeight: 500 }}><Icon name="alert" size={13} color="#FF5252"/> {error}</div>}
 
             <button
                 type="submit"
+                disabled={loading}
                 style={{
                   width: '100%', padding: '14px', borderRadius: 14, border: 'none',
                   background: `linear-gradient(135deg, ${C.pinkDark}, ${C.lavender})`,
-                  color: 'white', fontSize: 15, fontWeight: 700, cursor: 'pointer',
+                  color: 'white', fontSize: 15, fontWeight: 700, cursor: loading ? 'default' : 'pointer',
+                  opacity: loading ? 0.7 : 1,
                   boxShadow: '0 4px 16px rgba(255,92,138,0.3)'
                 }}>
-              {mode === 'login' ? '로그인하기 ✨' : '가입하고 시작하기 ✨'}
+              {loading ? '처리 중...' : (mode === 'login' ? '로그인하기 ✨' : '가입하고 시작하기 ✨')}
             </button>
           </form>
         </div>
       </div>
   );
 }
-
-
