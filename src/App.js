@@ -1299,15 +1299,36 @@ function RoutineManager({ onClose }) {
     }
   };
 
-  // 여기(루틴 모아보기)에서 지우는 건 전체 삭제. 날짜별로 지우고 싶으면 홈/캘린더 탭에서 지워야 함
-  const remove = async (todo) => {
-    const id = (todo && typeof todo === 'object') ? todo.id : todo;
-    if (!window.confirm('이 루틴을 전체(모든 날짜) 삭제할까요?')) return;
+  // 여기(루틴 모아보기)엔 따로 "선택한 날짜"가 없어서, "이 날짜만 삭제"는 오늘 기준으로 처리함
+  // (체크도 오늘 기준으로 되니까 통일감 있게)
+  const [deleteChoice, setDeleteChoice] = useState(null);   // {id, title}
+
+  const remove = (todo) => {
+    if (!todo || typeof todo !== 'object') return;
+    setDeleteChoice({ id: todo.id, title: todo.title });
+  };
+
+  const deleteToday = async () => {
+    if (!deleteChoice) return;
     try {
-      await axios.delete(`${API}/todos/${id}`);
+      await axios.delete(`${API}/todos/${deleteChoice.id}`, { params: { date: todayStr } });
+      fetchRoutines();
+    } catch (err) {
+      console.error('Failed to delete routine occurrence:', err);
+    } finally {
+      setDeleteChoice(null);
+    }
+  };
+
+  const deleteAll = async () => {
+    if (!deleteChoice) return;
+    try {
+      await axios.delete(`${API}/todos/${deleteChoice.id}`);
       fetchRoutines();
     } catch (err) {
       console.error('Failed to delete routine:', err);
+    } finally {
+      setDeleteChoice(null);
     }
   };
 
@@ -1331,6 +1352,15 @@ function RoutineManager({ onClose }) {
           {routines.map(todo => (
               <TodoCard key={todo.id} todo={todo} onToggle={toggle} onDelete={remove}/>
           ))}
+
+          {deleteChoice && (
+              <DeleteRoutineChoiceModal
+                  title={deleteChoice.title}
+                  dateLabel="오늘"
+                  onDeleteOccurrence={deleteToday}
+                  onDeleteAll={deleteAll}
+                  onCancel={() => setDeleteChoice(null)}/>
+          )}
 
           <button onClick={onClose}
                   style={{width: '100%', marginTop: 18, padding: 13, borderRadius: 14, border: `1px solid ${C.border}`, background: 'white', fontSize: 14, color: C.muted, cursor: 'pointer'}}>닫기</button>
