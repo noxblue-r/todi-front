@@ -322,16 +322,29 @@ export default function App() {
     localStorage.removeItem('todi_token');
   };
 
-  // 100% 달성 감지는 훅이라 이른 return보다 먼저 호출돼야 함 (Rules of Hooks)
-  const celebrationTodos = todos.filter(t => t.dueDate === selectedDate);
-  const celebrationRate = celebrationTodos.length === 0 ? 0 : Math.round((celebrationTodos.filter(t => t.completed).length / celebrationTodos.length) * 100);
+  const todayStr = getLocalDateStr();
+  const isToday = selectedDate === todayStr;
+  // 선택한 날짜의 할 일: 그 날짜에 정확히 등록된 할 일 + 시작일이 지난 루틴 할 일(완료 여부는 그 날짜 기준)
+  const selectedTodos = [
+    ...todos.filter(t => !t.isRoutine && t.dueDate === selectedDate),
+    ...todos.filter(t => t.isRoutine && t.dueDate <= selectedDate && !isRoutineExcludedOn(t.id, selectedDate))
+        .map(t => ({...t, completed: isRoutineDoneOn(t.id, selectedDate)})),
+  ];
+  const completed = selectedTodos.filter(t => t.completed);
+  const rate = selectedTodos.length === 0 ? 0 : Math.round((completed.length / selectedTodos.length) * 100);
+
+  // 100% 달성 감지는 훅이라 이른 return보다 먼저 호출돼야 함 (Rules of Hooks).
+  // 예전엔 여기서 selectedTodos가 아니라 todos를 직접(그것도 dueDate만 보고) 다시 걸러서 계산해서,
+  // 루틴 할 일이 있는 날엔 그 루틴이 아예 안 잡히거나 완료 여부가 실제 화면 진행률(rate)이랑 안 맞아서
+  // 100%가 떠도 축하 문구가 안 뜨는 버그가 있었음. 이제 진행률 바랑 똑같은 selectedTodos/rate를 그대로 씀
   useEffect(() => {
     const prevRate = prevRateRef.current[selectedDate];
-    if (celebrationTodos.length > 0 && celebrationRate === 100 && prevRate !== 100) {
+    if (selectedTodos.length > 0 && rate === 100 && prevRate !== 100) {
       setShowCelebration(true);
     }
-    prevRateRef.current[selectedDate] = celebrationRate;
-  }, [celebrationRate, selectedDate, celebrationTodos.length]);
+    prevRateRef.current[selectedDate] = rate;
+  }, [rate, selectedDate, selectedTodos.length]);
+
 
   if (checkingSession) {
     return (
@@ -444,15 +457,6 @@ export default function App() {
     }
   };
 
-  const todayStr = getLocalDateStr();
-  const isToday = selectedDate === todayStr;
-  // 선택한 날짜의 할 일: 그 날짜에 정확히 등록된 할 일 + 시작일이 지난 루틴 할 일(완료 여부는 그 날짜 기준)
-  const selectedTodos = [
-    ...todos.filter(t => !t.isRoutine && t.dueDate === selectedDate),
-    ...todos.filter(t => t.isRoutine && t.dueDate <= selectedDate && !isRoutineExcludedOn(t.id, selectedDate))
-        .map(t => ({...t, completed: isRoutineDoneOn(t.id, selectedDate)})),
-  ];
-
   // 카테고리 색깔 순서 맵 (홈 화면 카테고리 순서와 동일하게)
   const colorOrderMap = Object.fromEntries(groups.map((g, idx) => [g.id, idx]));
 
@@ -468,8 +472,6 @@ export default function App() {
       return a.id - b.id;
     });
   };
-  const completed = selectedTodos.filter(t => t.completed);
-  const rate = selectedTodos.length === 0 ? 0 : Math.round((completed.length / selectedTodos.length) * 100);
 
   return (
       <div style={{background: C.bg, minHeight: '100vh', maxWidth: 480, margin: '0 auto', fontFamily: '-apple-system, sans-serif', color: C.text}}>
