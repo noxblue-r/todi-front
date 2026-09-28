@@ -17,7 +17,8 @@ const applyServerProfile = (cached, authData) => {
     statusMessage: authData.statusMessage ?? '',
     avatarEmoji: authData.avatarEmoji || base.avatarEmoji,
     avatarSize: authData.avatarSize || base.avatarSize || 'medium',
-    avatarType: authData.hasPhoto ? 'photo' : 'emoji',
+    avatarType: authData.avatarType || (authData.hasPhoto ? 'photo' : 'emoji'),
+    hasPhoto: !!authData.hasPhoto,
   };
 };
 
@@ -300,15 +301,18 @@ export default function App() {
     localStorage.removeItem('todi_token');
   };
 
-  // 닉네임 변경 후: 로그인 정보 갱신 + 새 닉네임으로 데이터 다시 불러오기
-  // newToken: 서버가 새 닉네임으로 다시 발급해준 로그인 토큰. 기존 토큰에는 옛 닉네임이 그대로 박혀 있어서,
-  // 이걸로 안 바꾸면 다음 요청부터 서버가 옛 닉네임으로 인증해버려 방금 옮겨놓은 데이터가 안 보이게 됨
-  const handleNicknameChanged = (newNickname, newToken) => {
+  // 설정 탭에서 "저장" 한 번 눌렀을 때 (닉네임/상태메시지/아바타 이모지·크기·타입 전부 한 번에) 반영.
+  // newToken: 닉네임이 바뀐 경우에만 있음 - 서버가 새 닉네임으로 다시 발급해준 로그인 토큰.
+  // 기존 토큰에는 옛 닉네임이 그대로 박혀 있어서, 이걸로 안 바꾸면 다음 요청부터 서버가 옛 닉네임으로
+  // 인증해버려 방금 옮겨놓은 데이터가 안 보이게 됨
+  const handleProfileSaved = (fields) => {
+    const { token: newToken, ...rest } = fields;
     if (newToken) localStorage.setItem('todi_token', newToken);
-    const updated = { ...user, nickname: newNickname };
+    const nicknameChanged = rest.nickname && rest.nickname !== user.nickname;
+    const updated = { ...user, ...rest };
     setUser(updated);
     localStorage.setItem('todi_user', JSON.stringify(updated));
-    setTimeout(refresh, 0);
+    if (nicknameChanged) setTimeout(refresh, 0);
   };
 
   // 회원 탈퇴 완료 후: 로그인 정보를 전부 지우고 로그인 화면으로
@@ -316,50 +320,6 @@ export default function App() {
     setUser(null);
     localStorage.removeItem('todi_user');
     localStorage.removeItem('todi_token');
-  };
-
-  // 상태메시지 변경. 화면은 바로 바뀌게 하고(낙관적 업데이트), 서버에도 저장해서 다른 기기에서도 똑같이 보이게 함
-  const handleStatusMessageChanged = (newMessage) => {
-    const updated = { ...user, statusMessage: newMessage };
-    setUser(updated);
-    localStorage.setItem('todi_user', JSON.stringify(updated));
-    axios.patch(`${API}/account/profile`, { statusMessage: newMessage }).catch((err) => {
-      console.error('Failed to save status message:', err);
-    });
-  };
-
-  // 아바타 이모티콘 변경. 서버에도 저장
-  const handleAvatarChanged = (emoji) => {
-    const updated = { ...user, avatarEmoji: emoji, avatarType: 'emoji' };
-    setUser(updated);
-    localStorage.setItem('todi_user', JSON.stringify(updated));
-    axios.patch(`${API}/account/profile`, { avatarEmoji: emoji }).catch((err) => {
-      console.error('Failed to save avatar emoji:', err);
-    });
-  };
-
-  // 아바타 표시 크기 변경. 서버에도 저장
-  const handleAvatarSizeChanged = (size) => {
-    const updated = { ...user, avatarSize: size };
-    setUser(updated);
-    localStorage.setItem('todi_user', JSON.stringify(updated));
-    axios.patch(`${API}/account/profile`, { avatarSize: size }).catch((err) => {
-      console.error('Failed to save avatar size:', err);
-    });
-  };
-
-  // 프로필 사진 업로드 성공 후: 사진을 쓰도록 표시 + 캐시 무효화용 버전 갱신
-  const handlePhotoChanged = () => {
-    const updated = { ...user, avatarType: 'photo', avatarPhotoVersion: Date.now() };
-    setUser(updated);
-    localStorage.setItem('todi_user', JSON.stringify(updated));
-  };
-
-  // 프로필 사진 삭제 후: 다시 이모티콘으로
-  const handlePhotoRemoved = () => {
-    const updated = { ...user, avatarType: 'emoji' };
-    setUser(updated);
-    localStorage.setItem('todi_user', JSON.stringify(updated));
   };
 
   // 100% 달성 감지는 훅이라 이른 return보다 먼저 호출돼야 함 (Rules of Hooks)
@@ -738,7 +698,7 @@ export default function App() {
 
         {/* 설정 모달 */}
         {showSettings && (
-            <SettingsModal user={user} onClose={() => setShowSettings(false)} onLogout={handleLogout} onWithdraw={handleWithdrawn} onNicknameChanged={handleNicknameChanged} onStatusMessageChanged={handleStatusMessageChanged} onAvatarChanged={handleAvatarChanged} onAvatarSizeChanged={handleAvatarSizeChanged} onPhotoChanged={handlePhotoChanged} onPhotoRemoved={handlePhotoRemoved}/>
+            <SettingsModal user={user} onClose={() => setShowSettings(false)} onLogout={handleLogout} onWithdraw={handleWithdrawn} onProfileSaved={handleProfileSaved}/>
         )}
 
         {/* + 버튼 메뉴 (할 일 추가 / 카테고리 관리) */}
@@ -884,16 +844,17 @@ function PlusMenu({ onClose, onAddTodo, onManageCategories }) {
 
 // 프로필 / 계정 관리 모달
 // 프로필 아바타: 사진을 쓰기로 했고 실제로 로드되면 사진, 아니면 이모티콘
-function Avatar({ user, size }) {
+function Avatar({ user, size, previewUrl }) {
   const [imgFailed, setImgFailed] = useState(false);
 
   useEffect(() => {
     setImgFailed(false);
-  }, [user.avatarPhotoVersion, user.avatarType]);
+  }, [user.avatarPhotoVersion, user.avatarType, previewUrl]);
 
   const showPhoto = user.avatarType === 'photo' && !imgFailed;
   if (showPhoto) {
-    const photoUrl = `${API}/account/avatar-image?nickname=${encodeURIComponent(user.nickname)}&v=${user.avatarPhotoVersion || 0}`;
+    // previewUrl: 설정 탭에서 아직 저장 전인 새 사진을 미리 보여줄 때 씀 (이땐 서버 대신 이 로컬 미리보기를 씀)
+    const photoUrl = previewUrl || `${API}/account/avatar-image?nickname=${encodeURIComponent(user.nickname)}&v=${user.avatarPhotoVersion || 0}`;
     return (
         <img src={photoUrl} alt="프로필 사진" onError={() => setImgFailed(true)}
              style={{width: size, height: size, borderRadius: size / 2, objectFit: 'cover', flexShrink: 0}}/>
@@ -1025,76 +986,79 @@ function PhotoCropModal({ file, onCancel, onConfirm }) {
   );
 }
 
-function SettingsModal({ user, onClose, onLogout, onWithdraw, onNicknameChanged, onStatusMessageChanged, onAvatarChanged, onAvatarSizeChanged, onPhotoChanged, onPhotoRemoved }) {
-  const [editingName, setEditingName] = useState(false);
-  const [newName, setNewName] = useState(user.nickname);
-  const [saving, setSaving] = useState(false);
-  const [nameError, setNameError] = useState('');
+function SettingsModal({ user, onClose, onLogout, onWithdraw, onProfileSaved }) {
+  // 전부 "저장" 버튼 한 번에 반영되는 임시(staged) 값들. 저장 누르기 전엔 서버로 아무것도 안 나감
+  const [nickname, setNickname] = useState(user.nickname);
+  const [statusMessage, setStatusMessage] = useState(user.statusMessage || '');
+  const [avatarEmoji, setAvatarEmoji] = useState(user.avatarEmoji || '🐈‍⬛');
+  const [avatarSize, setAvatarSize] = useState(user.avatarSize || 'medium');
+  const [avatarType, setAvatarType] = useState(user.avatarType || 'emoji');
+  const [pendingPhotoFile, setPendingPhotoFile] = useState(null);   // 새로 고른(크롭한) 사진 파일. 저장 누를 때 업로드됨
+  const [pendingPhotoPreviewUrl, setPendingPhotoPreviewUrl] = useState(null);
+  const [removePhotoFlag, setRemovePhotoFlag] = useState(false);    // "사진 삭제"를 눌렀지만 아직 저장 전
+
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
-  const [uploadingPhoto, setUploadingPhoto] = useState(false);
-  const [avatarError, setAvatarError] = useState('');
-  const photoInputRef = useRef(null);
   const [cropFile, setCropFile] = useState(null);
+  const photoInputRef = useRef(null);
+
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
+  const [withdrawing, setWithdrawing] = useState(false);
+
+  // 새로 고른 사진 미리보기 URL은 컴포넌트 떠날 때/바뀔 때 정리
+  useEffect(() => {
+    return () => { if (pendingPhotoPreviewUrl) URL.revokeObjectURL(pendingPhotoPreviewUrl); };
+  }, [pendingPhotoPreviewUrl]);
+
+  const previewUser = { ...user, nickname, avatarEmoji, avatarSize, avatarType };
+
+  const dirty = nickname.trim() !== user.nickname
+      || statusMessage.trim() !== (user.statusMessage || '')
+      || avatarEmoji !== (user.avatarEmoji || '🐈‍⬛')
+      || avatarSize !== (user.avatarSize || 'medium')
+      || avatarType !== (user.avatarType || 'emoji')
+      || !!pendingPhotoFile
+      || removePhotoFlag;
 
   const pickAvatar = (emoji) => {
-    onAvatarChanged(emoji);
-    setAvatarError('');
-    setShowAvatarPicker(false);
+    setAvatarEmoji(emoji);
+    setAvatarType('emoji');
+    setError('');
   };
 
   const handlePhotoFile = (e) => {
     const file = e.target.files && e.target.files[0];
     e.target.value = '';
     if (!file) return;
-    setAvatarError('');
+    setError('');
     setCropFile(file);
   };
 
   const handleCropCancel = () => setCropFile(null);
 
-  const handleCropConfirm = async (croppedFile) => {
+  // 사진은 여기서 바로 업로드하지 않고, 미리보기만 만들어서 "저장" 누를 때 같이 올라가게 함
+  const handleCropConfirm = (croppedFile) => {
     setCropFile(null);
-    setUploadingPhoto(true);
-    setAvatarError('');
-    try {
-      const formData = new FormData();
-      formData.append('file', croppedFile);
-      await axios.post(`${API}/account/avatar-image`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      onPhotoChanged();
-      setShowAvatarPicker(false);
-    } catch (err) {
-      setAvatarError(errorMessage(err));
-    } finally {
-      setUploadingPhoto(false);
-    }
+    if (pendingPhotoPreviewUrl) URL.revokeObjectURL(pendingPhotoPreviewUrl);
+    setPendingPhotoFile(croppedFile);
+    setPendingPhotoPreviewUrl(URL.createObjectURL(croppedFile));
+    setRemovePhotoFlag(false);
+    setAvatarType('photo');
   };
 
-  const removePhoto = async () => {
-    try {
-      await axios.delete(`${API}/account/avatar-image`);
-      onPhotoRemoved();
-      setAvatarError('');
-    } catch (err) {
-      setAvatarError(errorMessage(err));
-    }
-  };
-
-  const [editingStatus, setEditingStatus] = useState(false);
-  const [newStatus, setNewStatus] = useState(user.statusMessage || '');
-
-  const saveStatus = () => {
-    onStatusMessageChanged(newStatus.trim());
-    setEditingStatus(false);
+  const stagePhotoRemoval = () => {
+    if (pendingPhotoPreviewUrl) URL.revokeObjectURL(pendingPhotoPreviewUrl);
+    setPendingPhotoFile(null);
+    setPendingPhotoPreviewUrl(null);
+    setRemovePhotoFlag(true);
+    setAvatarType('emoji');
   };
 
   const doLogout = () => {
     if (!window.confirm('로그아웃 할까요?')) return;
     onLogout();
   };
-
-  const [withdrawing, setWithdrawing] = useState(false);
 
   // 회원 탈퇴: 모든 할 일/카테고리/메모/타이머 기록/프로필 사진이 영구히 삭제되고 되돌릴 수 없어서 두 번 확인받음
   const doWithdraw = async () => {
@@ -1111,24 +1075,62 @@ function SettingsModal({ user, onClose, onLogout, onWithdraw, onNicknameChanged,
     }
   };
 
-  const startEdit = () => {
-    setNewName(user.nickname);
-    setNameError('');
-    setEditingName(true);
-  };
-
-  const saveName = async () => {
-    const trimmed = newName.trim();
-    if (!trimmed) { setNameError('닉네임을 입력해 주세요.'); return; }
-    if (trimmed === user.nickname) { setEditingName(false); return; }
+  // 저장 버튼 하나로 닉네임/상태메시지/아바타(이모지·크기·타입)/사진 변경·삭제를 전부 한 번에 반영
+  const saveAll = async () => {
+    const trimmedName = nickname.trim();
+    if (!trimmedName) { setError('닉네임을 입력해 주세요.'); return; }
     setSaving(true);
-    setNameError('');
+    setError('');
     try {
-      const res = await axios.patch(`${API}/account/nickname`, { newNickname: trimmed });
-      onNicknameChanged(res.data.nickname, res.data.token);
-      setEditingName(false);
+      let latestNickname = user.nickname;
+      let latestToken = null;
+      if (trimmedName !== user.nickname) {
+        const res = await axios.patch(`${API}/account/nickname`, { newNickname: trimmedName });
+        latestNickname = res.data.nickname;
+        latestToken = res.data.token;
+      }
+
+      let photoVersion = user.avatarPhotoVersion;
+      let hasPhoto = user.hasPhoto;
+      if (pendingPhotoFile) {
+        const formData = new FormData();
+        formData.append('file', pendingPhotoFile);
+        await axios.post(`${API}/account/avatar-image`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        photoVersion = Date.now();
+        hasPhoto = true;
+      } else if (removePhotoFlag) {
+        await axios.delete(`${API}/account/avatar-image`);
+        hasPhoto = false;
+      }
+
+      await axios.patch(`${API}/account/profile`, {
+        statusMessage: statusMessage.trim(),
+        avatarEmoji,
+        avatarSize,
+        avatarType,
+      });
+
+      onProfileSaved({
+        nickname: latestNickname,
+        token: latestToken,
+        statusMessage: statusMessage.trim(),
+        avatarEmoji,
+        avatarSize,
+        avatarType,
+        avatarPhotoVersion: photoVersion,
+        hasPhoto,
+      });
+
+      setPendingPhotoFile(null);
+      setPendingPhotoPreviewUrl(null);
+      setRemovePhotoFlag(false);
+      setShowAvatarPicker(false);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1600);
     } catch (err) {
-      setNameError(errorMessage(err));
+      setError(errorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -1145,45 +1147,26 @@ function SettingsModal({ user, onClose, onLogout, onWithdraw, onNicknameChanged,
           {/* 프로필 카드 */}
           <div style={{display: 'flex', alignItems: 'center', gap: 14, background: 'linear-gradient(135deg, #FFD6E7, #E8D5FF)', borderRadius: 18, padding: '18px 16px', marginBottom: 8}}>
             <button onClick={() => setShowAvatarPicker(v => !v)}
-                    style={{width: AVATAR_CARD_PX[user.avatarSize || 'medium'] + 18, height: AVATAR_CARD_PX[user.avatarSize || 'medium'] + 18, borderRadius: (AVATAR_CARD_PX[user.avatarSize || 'medium'] + 18) / 2, background: 'none', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0, cursor: 'pointer'}}>
-              <Avatar user={user} size={AVATAR_CARD_PX[user.avatarSize || 'medium']}/>
+                    style={{width: AVATAR_CARD_PX[avatarSize] + 18, height: AVATAR_CARD_PX[avatarSize] + 18, borderRadius: (AVATAR_CARD_PX[avatarSize] + 18) / 2, background: 'none', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0, cursor: 'pointer'}}>
+              <Avatar user={previewUser} size={AVATAR_CARD_PX[avatarSize]} previewUrl={pendingPhotoPreviewUrl}/>
             </button>
             <div style={{flex: 1, minWidth: 0}}>
-              {!editingName ? (
-                  <>
-                    <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
-                      <div style={{fontSize: 16, fontWeight: 700, color: C.pinkDark}}>{user.nickname}</div>
-                      <button onClick={startEdit}
-                              style={{display: 'flex', alignItems: 'center', gap: 3, background: 'none', border: 'none', fontSize: 12, color: C.pinkDark, cursor: 'pointer', opacity: 0.75}}><Icon name="edit" size={11}/> 수정</button>
-                    </div>
-                    <div style={{fontSize: 12, color: C.pinkDark, opacity: 0.75, marginTop: 2}}>Todi 스터디 플래너</div>
-                  </>
-              ) : (
-                  <div>
-                    <input value={newName} maxLength={30} onChange={e => setNewName(e.target.value)}
-                           style={{width: '100%', padding: '8px 10px', borderRadius: 10, border: `1px solid ${C.pinkDark}`, fontSize: 14, marginBottom: 4, boxSizing: 'border-box'}}/>
-                    <div style={{display: 'flex', alignItems: 'flex-start', gap: 3, fontSize: 10, color: C.pinkDark, opacity: 0.75, marginBottom: 6}}>
-                      <Icon name="alert" size={10} color={C.pinkDark}/> 욕설·비방 등 부적절한 닉네임은 사용하지 말아주세요
-                    </div>
-                    <div style={{display: 'flex', gap: 6}}>
-                      <button onClick={() => setEditingName(false)} disabled={saving}
-                              style={{flex: 1, padding: '6px 0', borderRadius: 10, border: 'none', background: 'rgba(255,255,255,0.7)', color: C.pinkDark, fontSize: 12, cursor: 'pointer'}}>취소</button>
-                      <button onClick={saveName} disabled={saving}
-                              style={{flex: 1, padding: '6px 0', borderRadius: 10, border: 'none', background: C.pinkDark, color: 'white', fontSize: 12, fontWeight: 700, cursor: 'pointer'}}>{saving ? '저장 중...' : '저장'}</button>
-                    </div>
-                  </div>
-              )}
+              <input value={nickname} maxLength={30} onChange={e => setNickname(e.target.value)}
+                     style={{width: '100%', padding: '8px 10px', borderRadius: 10, border: `1px solid ${C.pinkDark}`, fontSize: 15, fontWeight: 700, color: C.pinkDark, marginBottom: 4, boxSizing: 'border-box', background: 'rgba(255,255,255,0.6)'}}/>
+              <div style={{fontSize: 12, color: C.pinkDark, opacity: 0.75}}>Todi 스터디 플래너</div>
             </div>
           </div>
-          {nameError && <div style={{display: 'flex', alignItems: 'center', gap: 4, color: '#FF5252', fontSize: 12, marginBottom: 14}}><Icon name="alert" size={12} color="#FF5252"/> {nameError}</div>}
+          <div style={{display: 'flex', alignItems: 'flex-start', gap: 3, fontSize: 10, color: C.muted, marginBottom: 14}}>
+            <Icon name="alert" size={10} color={C.muted}/> 욕설·비방 등 부적절한 닉네임은 사용하지 말아주세요
+          </div>
 
           {showAvatarPicker && (
               <div style={{marginBottom: 18, background: '#FFF5F9', borderRadius: 14, padding: 12}}>
                 <div style={{fontSize: 11, color: C.muted, fontWeight: 600, marginBottom: 6}}>아바타 크기</div>
                 <div style={{display: 'flex', gap: 8, marginBottom: 12}}>
                   {[['small', '작게'], ['medium', '보통'], ['large', '크게']].map(([size, label]) => (
-                      <button key={size} onClick={() => onAvatarSizeChanged(size)}
-                              style={{flex: 1, padding: '8px 0', borderRadius: 10, border: (user.avatarSize || 'medium') === size ? `2px solid ${C.pinkDark}` : `1px solid ${C.border}`, background: 'white', color: C.pinkDark, fontSize: 12, fontWeight: 600, cursor: 'pointer'}}>
+                      <button key={size} onClick={() => setAvatarSize(size)}
+                              style={{flex: 1, padding: '8px 0', borderRadius: 10, border: avatarSize === size ? `2px solid ${C.pinkDark}` : `1px solid ${C.border}`, background: 'white', color: C.pinkDark, fontSize: 12, fontWeight: 600, cursor: 'pointer'}}>
                         {label}
                       </button>
                   ))}
@@ -1191,55 +1174,49 @@ function SettingsModal({ user, onClose, onLogout, onWithdraw, onNicknameChanged,
                 <div style={{display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10}}>
                   {AVATAR_EMOJIS.map(e => (
                       <button key={e} onClick={() => pickAvatar(e)}
-                              style={{width: 38, height: 38, borderRadius: 19, border: (user.avatarType !== 'photo' && (user.avatarEmoji || '🐈‍⬛') === e) ? `2px solid ${C.pinkDark}` : `1px solid ${C.border}`, background: 'white', fontSize: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                              style={{width: 38, height: 38, borderRadius: 19, border: (avatarType !== 'photo' && avatarEmoji === e) ? `2px solid ${C.pinkDark}` : `1px solid ${C.border}`, background: 'white', fontSize: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
                         {e}
                       </button>
                   ))}
                 </div>
                 <input ref={photoInputRef} type="file" accept="image/*" style={{display: 'none'}} onChange={handlePhotoFile}/>
                 <div style={{display: 'flex', gap: 8}}>
-                  <button onClick={() => photoInputRef.current && photoInputRef.current.click()} disabled={uploadingPhoto}
-                          style={{flex: 1, padding: '10px 0', borderRadius: 12, border: `1px solid ${C.border}`, background: 'white', color: C.pinkDark, fontSize: 12, fontWeight: 600, cursor: uploadingPhoto ? 'default' : 'pointer'}}>
-                    {uploadingPhoto ? '업로드 중...' : (<span style={{display: 'inline-flex', alignItems: 'center', gap: 4}}><Icon name="camera" size={13}/> 사진으로 설정</span>)}
+                  <button onClick={() => photoInputRef.current && photoInputRef.current.click()}
+                          style={{flex: 1, padding: '10px 0', borderRadius: 12, border: `1px solid ${C.border}`, background: 'white', color: C.pinkDark, fontSize: 12, fontWeight: 600, cursor: 'pointer'}}>
+                    <span style={{display: 'inline-flex', alignItems: 'center', gap: 4}}><Icon name="camera" size={13}/> 사진으로 설정</span>
                   </button>
-                  {user.avatarType === 'photo' && (
-                      <button onClick={removePhoto}
+                  {avatarType === 'photo' && (
+                      <button onClick={stagePhotoRemoval}
                               style={{flex: 1, padding: '10px 0', borderRadius: 12, border: `1px solid ${C.border}`, background: 'white', color: C.muted, fontSize: 12, cursor: 'pointer'}}>
                         사진 삭제
                       </button>
                   )}
                 </div>
                 <div style={{display: 'flex', alignItems: 'flex-start', gap: 3, fontSize: 10, color: C.muted, marginTop: 8, lineHeight: 1.4}}>
-                  <Icon name="alert" size={10} color={C.muted}/> 선정적·폭력적이거나 타인에게 불쾌감을 줄 수 있는 사진은 올리지 말아주세요
+                  <Icon name="alert" size={10} color={C.muted}/> 선정적·폭력적이거나 타인에게 불쾌감을 줄 수 있는 사진은 올리지 말아주세요. 사진은 "저장" 눌러야 실제로 반영돼요
                 </div>
-                {avatarError && <div style={{display: 'flex', alignItems: 'center', gap: 4, color: '#FF5252', fontSize: 12, marginTop: 8}}><Icon name="alert" size={12} color="#FF5252"/> {avatarError}</div>}
               </div>
           )}
 
           <div style={{fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 8}}>상태메시지</div>
-          {!editingStatus ? (
-              <button onClick={() => { setNewStatus(user.statusMessage || ''); setEditingStatus(true); }}
-                      style={{width: '100%', textAlign: 'left', padding: '14px 16px', borderRadius: 14, border: `1px solid ${C.border}`, background: 'white', fontSize: 14, color: user.statusMessage ? C.text : C.muted, cursor: 'pointer', marginBottom: 18}}>
-                {user.statusMessage || (<span style={{display: 'inline-flex', alignItems: 'center', gap: 4}}>상태메시지를 입력해 보세요 <Icon name="edit" size={12}/></span>)}
-              </button>
-          ) : (
-              <div style={{marginBottom: 18}}>
-                <input value={newStatus} maxLength={40} placeholder="예: 오늘도 화이팅! 🔥"
-                       onChange={e => setNewStatus(e.target.value)}
-                       style={{...inp, marginBottom: 4}}/>
-                <div style={{display: 'flex', alignItems: 'flex-start', gap: 3, fontSize: 10, color: C.muted, marginBottom: 8}}>
-                  <Icon name="alert" size={10} color={C.muted}/> 욕설·비방 등 부적절한 문구는 사용하지 말아주세요
-                </div>
-                <div style={{display: 'flex', gap: 8}}>
-                  <button onClick={() => setEditingStatus(false)}
-                          style={{flex: 1, padding: 11, borderRadius: 12, border: `1px solid ${C.border}`, background: 'white', color: C.muted, fontSize: 13, cursor: 'pointer'}}>취소</button>
-                  <button onClick={saveStatus}
-                          style={{flex: 1, padding: 11, borderRadius: 12, border: 'none', background: `linear-gradient(135deg, ${C.pinkDark}, ${C.lavender})`, color: 'white', fontSize: 13, fontWeight: 700, cursor: 'pointer'}}>저장</button>
-                </div>
-              </div>
-          )}
+          <input value={statusMessage} maxLength={40} placeholder="상태메시지를 입력해 보세요"
+                 onChange={e => setStatusMessage(e.target.value)}
+                 style={{...inp, marginBottom: 4}}/>
+          <div style={{display: 'flex', alignItems: 'flex-start', gap: 3, fontSize: 10, color: C.muted, marginBottom: 18}}>
+            <Icon name="alert" size={10} color={C.muted}/> 욕설·비방 등 부적절한 문구는 사용하지 말아주세요
+          </div>
 
-          <div style={{fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 8}}>계정</div>
+          {/* 저장 버튼: 닉네임/상태메시지/아바타/사진 변경 전부 여기 한 번으로 저장됨 */}
+          <button onClick={saveAll} disabled={saving || !dirty}
+                  style={{width: '100%', padding: 14, borderRadius: 14, border: 'none',
+                    background: (saving || !dirty) ? C.border : `linear-gradient(135deg, ${C.pinkDark}, ${C.lavender})`,
+                    color: (saving || !dirty) ? C.muted : 'white', fontSize: 14, fontWeight: 700,
+                    cursor: (saving || !dirty) ? 'default' : 'pointer', marginBottom: 8}}>
+            {saving ? '저장 중...' : (saved ? '저장됐어요 ✓' : '저장')}
+          </button>
+          {error && <div style={{display: 'flex', alignItems: 'center', gap: 4, color: '#FF5252', fontSize: 12, marginBottom: 14}}><Icon name="alert" size={12} color="#FF5252"/> {error}</div>}
+
+          <div style={{fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 8, marginTop: 10}}>계정</div>
           <button onClick={doLogout}
                   style={{width: '100%', textAlign: 'left', padding: '14px 16px', borderRadius: 14, border: `1px solid ${C.border}`, background: 'white', fontSize: 14, color: C.text, cursor: 'pointer', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 10}}>
             <Icon name="logout" size={17} color={C.text}/> 로그아웃
