@@ -1019,7 +1019,10 @@ function SettingsModal({ user, onClose, onLogout, onWithdraw, onProfileSaved }) 
     return () => { if (pendingPhotoPreviewUrl) URL.revokeObjectURL(pendingPhotoPreviewUrl); };
   }, [pendingPhotoPreviewUrl]);
 
-  const previewUser = { ...user, nickname, avatarEmoji, avatarSize, avatarType };
+  // 주의: nickname은 일부러 안 덮어씀. Avatar가 사진 URL을 만들 때 여기 nickname을 쓰는데,
+  // 아직 저장 안 한(입력 중인) 닉네임으로 조회하면 서버에 없는 닉네임이라 사진 요청이 실패해서
+  // 저장하지도 않았는데 사진이 기본 이모지로 바뀌어 보이는 버그가 있었음
+  const previewUser = { ...user, avatarEmoji, avatarSize, avatarType };
 
   const dirty = nickname.trim() !== user.nickname
       || statusMessage.trim() !== (user.statusMessage || '')
