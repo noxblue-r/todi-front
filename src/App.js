@@ -163,6 +163,7 @@ export default function App() {
   const [todos, setTodos] = useState([]);
   const [routineCompletions, setRoutineCompletions] = useState([]);  // [{todoId, date}] - 루틴 할 일의 날짜별 완료 기록
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);   // null이면 새 할 일 추가, 값 있으면 그 id를 수정 중
   const [form, setForm] = useState(defaultForm);
   const [selectedDate, setSelectedDate] = useState(getLocalDateStr());
   const [groups, setGroups] = useState([]);                // 카테고리별로 묶인 오늘 할 일
@@ -336,11 +337,30 @@ export default function App() {
 
   // 폼 열기. 카테고리 헤더의 + 버튼으로 열면 그 카테고리가 미리 선택돼
   const openForm = (categoryId) => {
+    setEditingId(null);
     setForm({ ...defaultForm, categoryId: categoryId ?? '' });
     setShowForm(true);
   };
 
-  const addTodo = async () => {
+  // 기존 할 일 수정 폼 열기 (날짜 잘못 만들었을 때 등, 필드 값 그대로 채워서 열어줌)
+  const openEditForm = (todo) => {
+    setEditingId(todo.id);
+    setForm({
+      title: todo.title,
+      memo: todo.memo || '',
+      categoryId: todo.categoryId ?? '',
+      priority: todo.priority || 'MEDIUM',
+      dueDate: todo.dueDate,
+      endDate: todo.endDate || '',
+      isRoutine: todo.isRoutine,
+      subject: todo.subject || '',
+      studyType: todo.studyType || 'ETC',
+      estimatedTime: todo.estimatedTime || 0,
+    });
+    setShowForm(true);
+  };
+
+  const saveTodo = async () => {
     if (!form.title.trim()) return;
     try {
       const body = {
@@ -349,12 +369,17 @@ export default function App() {
         endDate: form.endDate === '' ? null : form.endDate,
         nickname: user.nickname,
       };
-      await axios.post(`${API}/todos`, body);
+      if (editingId) {
+        await axios.put(`${API}/todos/${editingId}`, body);
+      } else {
+        await axios.post(`${API}/todos`, body);
+      }
       setForm(defaultForm);
       setShowForm(false);
+      setEditingId(null);
       refresh();
     } catch (err) {
-      console.error('Failed to add todo:', err);
+      console.error('Failed to save todo:', err);
     }
   };
 
@@ -494,7 +519,7 @@ export default function App() {
 
             {visibleGroups.map(group => (
                 <CategoryGroup key={group.id ?? 'none'} group={group}
-                               onAdd={openForm} onToggle={toggleComplete} onDelete={deleteTodo}/>
+                               onAdd={openForm} onToggle={toggleComplete} onDelete={deleteTodo} onEdit={openEditForm}/>
             ))}
 
             {visibleGroups.length === 0 && (
@@ -558,7 +583,7 @@ export default function App() {
                 );
               }
               return calendarTodos.map(todo => (
-                  <TodoCard key={todo.id} todo={todo} onToggle={toggleComplete} onDelete={deleteTodo}/>
+                  <TodoCard key={todo.id} todo={todo} onToggle={toggleComplete} onDelete={deleteTodo} onEdit={openEditForm}/>
               ));
             })()}
           </>}
@@ -571,7 +596,7 @@ export default function App() {
         {showForm && (
             <div style={{position: 'fixed', bottom: 0, left: 0, right: 0, maxWidth: 480, margin: '0 auto', background: C.white, borderRadius: '24px 24px 0 0', padding: '16px 24px 40px', boxShadow: `0 -4px 30px rgba(255,143,171,0.2)`, zIndex: 100, boxSizing: 'border-box'}}>
               <div style={{width: 36, height: 4, background: C.border, borderRadius: 2, margin: '0 auto 16px'}}/>
-              <div style={{display: 'flex', alignItems: 'center', gap: 6, fontSize: 15, fontWeight: 700, color: C.pink, marginBottom: 14}}><Icon name="paw" size={15} color={C.pink}/> 새로운 할 일</div>
+              <div style={{display: 'flex', alignItems: 'center', gap: 6, fontSize: 15, fontWeight: 700, color: C.pink, marginBottom: 14}}><Icon name="paw" size={15} color={C.pink}/> {editingId ? '할 일 수정' : '새로운 할 일'}</div>
               <input placeholder="할 일 제목 *" value={form.title}
                      onChange={e => setForm({...form, title: e.target.value})} style={inp}/>
               <input placeholder="메모 (선택)" value={form.memo}
@@ -603,8 +628,8 @@ export default function App() {
                 <Icon name="repeat" size={13}/> 루틴으로 표시 (반복되는 일정)
               </label>
               <div style={{display: 'flex', gap: 8, marginTop: 4}}>
-                <button onClick={() => setShowForm(false)} style={{flex: 1, padding: 13, borderRadius: 14, border: `1px solid ${C.border}`, background: 'white', fontSize: 14, cursor: 'pointer', color: C.muted}}>취소</button>
-                <button onClick={addTodo} style={{flex: 2, padding: 13, borderRadius: 14, border: 'none', background: `linear-gradient(135deg, ${C.pinkDark}, ${C.lavender})`, color: 'white', fontSize: 14, fontWeight: 700, cursor: 'pointer'}}>추가 ✨</button>
+                <button onClick={() => { setShowForm(false); setEditingId(null); }} style={{flex: 1, padding: 13, borderRadius: 14, border: `1px solid ${C.border}`, background: 'white', fontSize: 14, cursor: 'pointer', color: C.muted}}>취소</button>
+                <button onClick={saveTodo} style={{flex: 2, padding: 13, borderRadius: 14, border: 'none', background: `linear-gradient(135deg, ${C.pinkDark}, ${C.lavender})`, color: 'white', fontSize: 14, fontWeight: 700, cursor: 'pointer'}}>{editingId ? '저장' : '추가'} ✨</button>
               </div>
             </div>
         )}
@@ -697,7 +722,7 @@ export default function App() {
   );
 }
 
-function TodoCard({ todo, onToggle, onDelete, compact, hideCategory }) {
+function TodoCard({ todo, onToggle, onDelete, onEdit, compact, hideCategory }) {
   // 체크박스 색: 카테고리 색이 있으면 그 색, 없으면 우선순위 색
   const accent = todo.categoryColor || PRIORITY_COLOR[todo.priority] || C.pink;
   return (
@@ -723,13 +748,16 @@ function TodoCard({ todo, onToggle, onDelete, compact, hideCategory }) {
             )}
           </div>
         </div>
+        {onEdit && (
+            <button onClick={() => onEdit(todo)} style={{background: 'none', border: 'none', color: C.muted, cursor: 'pointer', opacity: 0.5, display: 'flex'}}><Icon name="edit" size={15}/></button>
+        )}
         <button onClick={() => onDelete(todo.id)} style={{background: 'none', border: 'none', color: C.muted, cursor: 'pointer', opacity: 0.5, display: 'flex'}}><Icon name="trash" size={15}/></button>
       </div>
   );
 }
 
 // "색깔 알약 헤더 + 아래 할 일 목록" 한 덩어리
-function CategoryGroup({ group, onAdd, onToggle, onDelete }) {
+function CategoryGroup({ group, onAdd, onToggle, onDelete, onEdit }) {
   const color = group.color || C.pink;
   return (
       <div style={{marginBottom: 16}}>
@@ -740,7 +768,7 @@ function CategoryGroup({ group, onAdd, onToggle, onDelete }) {
                   style={{width: 22, height: 22, borderRadius: 11, border: 'none', background: color, color: 'white', fontSize: 15, lineHeight: 1, cursor: 'pointer'}}>+</button>
         </div>
         {group.todos.map(todo => (
-            <TodoCard key={todo.id} todo={todo} onToggle={onToggle} onDelete={onDelete} hideCategory/>
+            <TodoCard key={todo.id} todo={todo} onToggle={onToggle} onDelete={onDelete} onEdit={onEdit} hideCategory/>
         ))}
       </div>
   );
