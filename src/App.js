@@ -3,6 +3,25 @@ import axios from 'axios';
 
 const API = process.env.REACT_APP_API_URL || 'https://todi-production-6cad.up.railway.app/api';
 
+// 서버에서 내려준 로그인 응답(authData: {nickname, email, statusMessage, avatarEmoji, avatarSize, hasPhoto, ...})을
+// 기존 로컬 유저 정보(cached)에 덮어씀. 이제 상태메시지/아바타도 서버가 기준(정답)이라서,
+// 다른 기기에서 로그인해도 이걸로 항상 최신 정보가 그대로 뜸.
+// hasPhoto는 서버가 계산해서 알려주는 값이라, avatarType은 여기서 photo/emoji로 바로 정해줌
+// (avatarPhotoVersion은 이미지 캐시 무효화용이라 서버엔 없는 값이라 그대로 유지)
+const applyServerProfile = (cached, authData) => {
+  const base = cached || {};
+  return {
+    ...base,
+    nickname: authData.nickname,
+    email: authData.email,
+    statusMessage: authData.statusMessage ?? '',
+    avatarEmoji: authData.avatarEmoji || base.avatarEmoji,
+    avatarSize: authData.avatarSize || base.avatarSize || 'medium',
+    avatarType: authData.hasPhoto ? 'photo' : 'emoji',
+  };
+};
+
+
 // 로그인한 사용자의 닉네임 (없으면 빈 문자열). <img src>에 ?nickname= 쿼리로 붙일 때만 사용
 const getNickname = () => {
   try {
@@ -229,14 +248,20 @@ export default function App() {
 
     axios.get(`${API}/auth/me`).then(res => {
       setUser(prev => {
-        const merged = { ...(prev || {}), nickname: res.data.nickname, email: res.data.email };
+        const merged = applyServerProfile(prev, res.data);
         localStorage.setItem('todi_user', JSON.stringify(merged));
         return merged;
       });
-    }).catch(() => {
-      localStorage.removeItem('todi_token');
-      localStorage.removeItem('todi_user');
-      setUser(null);
+    }).catch((err) => {
+      // 진짜 로그인이 무효할 때(401/403)만 로그아웃시킴.
+      // 네트워크가 잠깐 끊기거나 서버가 응답이 느릴 때(예: 무료 플랜 서버 깨어나는 중)까지 로그아웃되면
+      // "새로고침했더니 로그인 화면으로 돌아온다"는 버그가 생겨서, 그런 경우엔 그냥 저장해둔 정보로 계속 진행함
+      const status = err?.response?.status;
+      if (status === 401 || status === 403) {
+        localStorage.removeItem('todi_token');
+        localStorage.removeItem('todi_user');
+        setUser(null);
+      }
     }).finally(() => setCheckingSession(false));
   }, []);
 
@@ -248,7 +273,7 @@ export default function App() {
       const saved = JSON.parse(localStorage.getItem('todi_user'));
       if (saved && saved.nickname === authData.nickname) cached = saved;
     } catch (e) { /* 무시 */ }
-    const merged = { ...(cached || {}), nickname: authData.nickname, email: authData.email };
+    const merged = applyServerProfile(cached, authData);
     setUser(merged);
     localStorage.setItem('todi_user', JSON.stringify(merged));
   };
@@ -277,25 +302,34 @@ export default function App() {
     localStorage.removeItem('todi_token');
   };
 
-  // 상태메시지 변경 (이 기기의 로그인 정보에만 저장, 서버 데이터는 안 건드림)
+  // 상태메시지 변경. 화면은 바로 바뀌게 하고(낙관적 업데이트), 서버에도 저장해서 다른 기기에서도 똑같이 보이게 함
   const handleStatusMessageChanged = (newMessage) => {
     const updated = { ...user, statusMessage: newMessage };
     setUser(updated);
     localStorage.setItem('todi_user', JSON.stringify(updated));
+    axios.patch(`${API}/account/profile`, { statusMessage: newMessage }).catch((err) => {
+      console.error('Failed to save status message:', err);
+    });
   };
 
-  // 아바타 이모티콘 변경 (이 기기의 로그인 정보에만 저장)
+  // 아바타 이모티콘 변경. 서버에도 저장
   const handleAvatarChanged = (emoji) => {
     const updated = { ...user, avatarEmoji: emoji, avatarType: 'emoji' };
     setUser(updated);
     localStorage.setItem('todi_user', JSON.stringify(updated));
+    axios.patch(`${API}/account/profile`, { avatarEmoji: emoji }).catch((err) => {
+      console.error('Failed to save avatar emoji:', err);
+    });
   };
 
-  // 아바타 표시 크기 변경 (이 기기의 로그인 정보에만 저장)
+  // 아바타 표시 크기 변경. 서버에도 저장
   const handleAvatarSizeChanged = (size) => {
     const updated = { ...user, avatarSize: size };
     setUser(updated);
     localStorage.setItem('todi_user', JSON.stringify(updated));
+    axios.patch(`${API}/account/profile`, { avatarSize: size }).catch((err) => {
+      console.error('Failed to save avatar size:', err);
+    });
   };
 
   // 프로필 사진 업로드 성공 후: 사진을 쓰도록 표시 + 캐시 무효화용 버전 갱신
@@ -726,8 +760,8 @@ function TodoCard({ todo, onToggle, onDelete, onEdit, compact, hideCategory }) {
   // 체크박스 색: 카테고리 색이 있으면 그 색, 없으면 우선순위 색
   const accent = todo.categoryColor || PRIORITY_COLOR[todo.priority] || C.pink;
   return (
-      <div style={{background: compact ? 'transparent' : C.card, borderRadius: compact ? 0 : 14, padding: compact ? '8px 0' : 14, marginBottom: compact ? 0 : 10, display: 'flex', alignItems: 'center', gap: 10, borderBottom: compact ? `1px solid ${C.border}` : 'none', border: compact ? 'none' : `1px solid ${C.border}`}}>
-        <button onClick={() => onToggle(todo.id)} style={{width: 26, height: 26, borderRadius: 13, border: `2px solid ${accent}`, background: todo.completed ? accent : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0}}>
+      <div onClick={() => onEdit && onEdit(todo)} style={{background: compact ? 'transparent' : C.card, borderRadius: compact ? 0 : 14, padding: compact ? '8px 0' : 14, marginBottom: compact ? 0 : 10, display: 'flex', alignItems: 'center', gap: 10, borderBottom: compact ? `1px solid ${C.border}` : 'none', border: compact ? 'none' : `1px solid ${C.border}`, cursor: onEdit ? 'pointer' : 'default'}}>
+        <button onClick={(e) => { e.stopPropagation(); onToggle(todo.id); }} style={{width: 26, height: 26, borderRadius: 13, border: `2px solid ${accent}`, background: todo.completed ? accent : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0}}>
           {todo.completed && <span style={{color: 'white', fontSize: 13}}>✓</span>}
         </button>
         <div style={{flex: 1}}>
@@ -748,10 +782,7 @@ function TodoCard({ todo, onToggle, onDelete, onEdit, compact, hideCategory }) {
             )}
           </div>
         </div>
-        {onEdit && (
-            <button onClick={() => onEdit(todo)} style={{background: 'none', border: 'none', color: C.muted, cursor: 'pointer', opacity: 0.5, display: 'flex'}}><Icon name="edit" size={15}/></button>
-        )}
-        <button onClick={() => onDelete(todo.id)} style={{background: 'none', border: 'none', color: C.muted, cursor: 'pointer', opacity: 0.5, display: 'flex'}}><Icon name="trash" size={15}/></button>
+        <button onClick={(e) => { e.stopPropagation(); onDelete(todo.id); }} style={{background: 'none', border: 'none', color: C.muted, cursor: 'pointer', opacity: 0.5, display: 'flex'}}><Icon name="trash" size={15}/></button>
       </div>
   );
 }
