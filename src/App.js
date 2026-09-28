@@ -19,6 +19,7 @@ const applyServerProfile = (cached, authData) => {
     avatarSize: authData.avatarSize || base.avatarSize || 'medium',
     avatarType: authData.avatarType || (authData.hasPhoto ? 'photo' : 'emoji'),
     hasPhoto: !!authData.hasPhoto,
+    provider: authData.provider || base.provider,
   };
 };
 
@@ -120,6 +121,8 @@ function Icon({ name, size = 20, color = 'currentColor', strokeWidth = 1.8 }) {
       return (<svg style={s} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>);
     case 'play':
       return (<svg style={s} viewBox="0 0 24 24" fill={color} stroke="none"><path d="M7 4.5v15a1 1 0 0 0 1.53.85l12-7.5a1 1 0 0 0 0-1.7l-12-7.5A1 1 0 0 0 7 4.5Z"/></svg>);
+    case 'mail':
+      return (<svg style={s} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m4 7 8 6 8-6"/></svg>);
     default:
       return null;
   }
@@ -874,6 +877,9 @@ function Avatar({ user, size, previewUrl }) {
 
 const AVATAR_EMOJIS = ['🐈‍⬛', '🐶', '🐰', '🐼', '🦊', '🐹', '🐧', '🦄', '🐢', '🐙', '🦁', '🐸'];
 
+// 로그인 방식 표시용 (설정 탭 "계정 정보")
+const PROVIDER_LABEL = { LOCAL: '이메일', GOOGLE: '구글', KAKAO: '카카오' };
+
 // 아바타 표시 크기 (작게/보통/크게) - 헤더용, 설정 카드용 각각의 픽셀 크기
 const AVATAR_HEADER_PX = { small: 40, medium: 54, large: 68 };
 const AVATAR_CARD_PX = { small: 34, medium: 48, large: 64 };
@@ -1217,6 +1223,18 @@ function SettingsModal({ user, onClose, onLogout, onWithdraw, onProfileSaved }) 
             {saving ? '저장 중...' : (saved ? '저장됐어요 ✓' : '저장')}
           </button>
           {error && <div style={{display: 'flex', alignItems: 'center', gap: 4, color: '#FF5252', fontSize: 12, marginBottom: 14}}><Icon name="alert" size={12} color="#FF5252"/> {error}</div>}
+
+          {/* 계정 정보: 어떤 계정으로 로그인했는지 확인용 (수정 불가) */}
+          <div style={{fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 8, marginTop: 10}}>계정 정보</div>
+          <div style={{padding: '14px 16px', borderRadius: 14, border: `1px solid ${C.border}`, background: 'white', marginBottom: 8}}>
+            <div style={{display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: C.text}}>
+              <Icon name="mail" size={15} color={C.muted}/>
+              {user.email && !user.email.endsWith('@users.todi') ? user.email : '이메일 비공개'}
+            </div>
+            <div style={{fontSize: 12, color: C.muted, marginTop: 4, marginLeft: 23}}>
+              {PROVIDER_LABEL[user.provider] || user.provider || '알 수 없음'} 계정으로 로그인 중
+            </div>
+          </div>
 
           <div style={{fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 8, marginTop: 10}}>계정</div>
           <button onClick={doLogout}
