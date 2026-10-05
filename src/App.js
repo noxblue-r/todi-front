@@ -2006,6 +2006,12 @@ function CalendarView({ selectedDate, onSelect, todos, exclusions }) {
     );
   };
 
+  // 기간(dueDate~endDate)으로 설정된 할 일 중, 그 날짜를 포함하는 것을 하나 찾음 (루틴 막대랑 겹치면 루틴 우선)
+  const getRangeTodo = (day) => {
+    const d = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    return todos.find(t => !t.isRoutine && t.endDate && t.dueDate <= d && d <= t.endDate);
+  };
+
   const selectDay = (day) => {
     const d = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
     onSelect(d);
@@ -2029,6 +2035,7 @@ function CalendarView({ selectedDate, onSelect, todos, exclusions }) {
             const isToday = dateStr === todayStr;
             const isSelected = dateStr === selectedDate;
             const hasT = hasTodo(day);
+            const rangeTodo = getRangeTodo(day);
             const dow = (firstDay + i) % 7;
             const holidayName = HOLIDAYS_KR[dateStr];
             const isHoliday = Boolean(holidayName) || dow === 0;
@@ -2047,7 +2054,18 @@ function CalendarView({ selectedDate, onSelect, todos, exclusions }) {
                         {holidayName}
                       </span>
                   )}
-                  {hasT && <div style={{position: 'absolute', bottom: 2, left: '50%', transform: 'translateX(-50%)', width: 4, height: 4, borderRadius: 2, background: isSelected ? 'white' : C.pink}}/>}
+                  {rangeTodo ? (
+                      <div style={{
+                        position: 'absolute', bottom: 3, height: 4,
+                        left: rangeTodo.dueDate === dateStr ? 4 : 0,
+                        right: rangeTodo.endDate === dateStr ? 4 : 0,
+                        background: isSelected ? 'rgba(255,255,255,0.9)' : (rangeTodo.categoryColor || C.pink),
+                        borderTopLeftRadius: rangeTodo.dueDate === dateStr ? 2 : 0,
+                        borderBottomLeftRadius: rangeTodo.dueDate === dateStr ? 2 : 0,
+                        borderTopRightRadius: rangeTodo.endDate === dateStr ? 2 : 0,
+                        borderBottomRightRadius: rangeTodo.endDate === dateStr ? 2 : 0,
+                      }}/>
+                  ) : (hasT && <div style={{position: 'absolute', bottom: 2, left: '50%', transform: 'translateX(-50%)', width: 4, height: 4, borderRadius: 2, background: isSelected ? 'white' : C.pink}}/>)}
                 </button>
             );
           })}
