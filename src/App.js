@@ -197,6 +197,8 @@ export default function App() {
   const [showPlusMenu, setShowPlusMenu] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [deleteChoice, setDeleteChoice] = useState(null);  // 루틴 할 일 삭제 시 {id, title} - "이 날짜만" vs "전체" 선택 모달
+  const [editingTodo, setEditingTodo] = useState(null);    // 지금 수정 중인 할 일의 원본(서버에서 받은 그대로) - 루틴인지 판단용
+  const [editChoice, setEditChoice] = useState(null);       // 루틴 할 일 수정 시 {id, title, body, date} - "이 날짜만" vs "전체" 선택 모달
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [showCategoryFilterMenu, setShowCategoryFilterMenu] = useState(false);
   const [calendarCategoryFilter, setCalendarCategoryFilter] = useState('ALL');
@@ -364,6 +366,7 @@ export default function App() {
   // 폼 열기. 카테고리 헤더의 + 버튼으로 열면 그 카테고리가 미리 선택돼
   const openForm = (categoryId) => {
     setEditingId(null);
+    setEditingTodo(null);
     setForm({ ...defaultForm, categoryId: categoryId ?? '' });
     setShowForm(true);
   };
@@ -371,6 +374,7 @@ export default function App() {
   // 기존 할 일 수정 폼 열기 (날짜 잘못 만들었을 때 등, 필드 값 그대로 채워서 열어줌)
   const openEditForm = (todo) => {
     setEditingId(todo.id);
+    setEditingTodo(todo);
     setForm({
       title: todo.title,
       memo: todo.memo || '',
@@ -388,13 +392,19 @@ export default function App() {
 
   const saveTodo = async () => {
     if (!form.title.trim()) return;
+    const body = {
+      ...form,
+      categoryId: form.categoryId === '' ? null : Number(form.categoryId),
+      endDate: form.endDate === '' ? null : form.endDate,
+      nickname: user.nickname,
+    };
+    // 루틴 할 일을 수정하는 거면, 곧바로 전체(원본)를 고치지 않고
+    // "이 날짜만" vs "전체" 먼저 물어봄 (안 그러면 그 날짜만 바꾸고 싶었는데 전체 반복 일정이 다 바뀌어버림)
+    if (editingId && editingTodo && editingTodo.isRoutine) {
+      setEditChoice({ id: editingId, title: form.title, body, date: selectedDate });
+      return;
+    }
     try {
-      const body = {
-        ...form,
-        categoryId: form.categoryId === '' ? null : Number(form.categoryId),
-        endDate: form.endDate === '' ? null : form.endDate,
-        nickname: user.nickname,
-      };
       if (editingId) {
         await axios.put(`${API}/todos/${editingId}`, body);
       } else {
@@ -403,9 +413,44 @@ export default function App() {
       setForm(defaultForm);
       setShowForm(false);
       setEditingId(null);
+      setEditingTodo(null);
       refresh();
     } catch (err) {
       console.error('Failed to save todo:', err);
+    }
+  };
+
+  // 루틴 할 일을 "이 날짜만" 수정 (원본 루틴은 그대로, 그 날짜만 일반 할 일로 분리됨)
+  const saveEditOccurrence = async () => {
+    if (!editChoice) return;
+    try {
+      await axios.put(`${API}/todos/${editChoice.id}`, editChoice.body, { params: { date: editChoice.date } });
+      setForm(defaultForm);
+      setShowForm(false);
+      setEditingId(null);
+      setEditingTodo(null);
+      refresh();
+    } catch (err) {
+      console.error('Failed to save routine occurrence:', err);
+    } finally {
+      setEditChoice(null);
+    }
+  };
+
+  // 루틴 할 일을 전체(원본, 모든 날짜) 수정
+  const saveEditAll = async () => {
+    if (!editChoice) return;
+    try {
+      await axios.put(`${API}/todos/${editChoice.id}`, editChoice.body);
+      setForm(defaultForm);
+      setShowForm(false);
+      setEditingId(null);
+      setEditingTodo(null);
+      refresh();
+    } catch (err) {
+      console.error('Failed to save routine entirely:', err);
+    } finally {
+      setEditChoice(null);
     }
   };
 
@@ -675,7 +720,7 @@ export default function App() {
                 <Icon name="repeat" size={13}/> 루틴으로 표시 (반복되는 일정)
               </label>
               <div style={{display: 'flex', gap: 8, marginTop: 4}}>
-                <button onClick={() => { setShowForm(false); setEditingId(null); }} style={{flex: 1, padding: 13, borderRadius: 14, border: `1px solid ${C.border}`, background: 'white', fontSize: 14, cursor: 'pointer', color: C.muted}}>취소</button>
+                <button onClick={() => { setShowForm(false); setEditingId(null); setEditingTodo(null); }} style={{flex: 1, padding: 13, borderRadius: 14, border: `1px solid ${C.border}`, background: 'white', fontSize: 14, cursor: 'pointer', color: C.muted}}>취소</button>
                 <button onClick={saveTodo} style={{flex: 2, padding: 13, borderRadius: 14, border: 'none', background: `linear-gradient(135deg, ${C.pinkDark}, ${C.lavender})`, color: 'white', fontSize: 14, fontWeight: 700, cursor: 'pointer'}}>{editingId ? '저장' : '추가'} ✨</button>
               </div>
             </div>
@@ -699,6 +744,16 @@ export default function App() {
                 onDeleteOccurrence={deleteRoutineOccurrence}
                 onDeleteAll={deleteRoutineAll}
                 onCancel={() => setDeleteChoice(null)}/>
+        )}
+
+        {/* 루틴 할 일 수정 선택 모달: 이 날짜만 vs 전체 */}
+        {editChoice && (
+            <EditRoutineChoiceModal
+                title={editChoice.title}
+                dateLabel={editChoice.date}
+                onEditOccurrence={saveEditOccurrence}
+                onEditAll={saveEditAll}
+                onCancel={() => setEditChoice(null)}/>
         )}
 
         {/* 설정 모달 */}
@@ -1284,6 +1339,36 @@ function DeleteRoutineChoiceModal({ title, dateLabel, onDeleteOccurrence, onDele
                   style={{width: '100%', padding: 14, borderRadius: 14, border: 'none', background: '#FFEAEA', fontSize: 14, fontWeight: 700, color: '#FF5252', cursor: 'pointer', marginBottom: 8, textAlign: 'left'}}>
             전체 삭제 (모든 날짜)
             <div style={{fontSize: 11, fontWeight: 400, color: '#FF5252', opacity: 0.8, marginTop: 2}}>이 루틴 자체가 없어져요. 되돌릴 수 없어요</div>
+          </button>
+
+          <button onClick={onCancel}
+                  style={{width: '100%', padding: 13, borderRadius: 14, border: `1px solid ${C.border}`, background: 'white', fontSize: 14, color: C.muted, cursor: 'pointer'}}>취소</button>
+        </div>
+      </div>
+  );
+}
+
+
+// 루틴 할 일 수정할 때 "이 날짜만" vs "전체(모든 날짜)" 고르는 모달.
+// "이 날짜만"을 고르면 원본 루틴은 안 바뀌고, 그 날짜만 일반 할 일로 떨어져 나와서 수정된 내용으로 저장됨
+function EditRoutineChoiceModal({ title, dateLabel, onEditOccurrence, onEditAll, onCancel }) {
+  return (
+      <div onClick={onCancel} style={{position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.35)', zIndex: 300, display: 'flex', alignItems: 'flex-end', justifyContent: 'center'}}>
+        <div onClick={e => e.stopPropagation()} style={{width: '100%', maxWidth: 480, background: C.white, borderRadius: '24px 24px 0 0', padding: '16px 24px 28px', boxSizing: 'border-box'}}>
+          <div style={{width: 36, height: 4, background: C.border, borderRadius: 2, margin: '0 auto 16px'}}/>
+          <div style={{display: 'flex', alignItems: 'center', gap: 6, fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 4}}><Icon name="paw" size={15} color={C.muted}/> 할 일 수정</div>
+          <div style={{fontSize: 13, color: C.muted, marginBottom: 18}}>"{title}"은(는) 루틴 할 일이에요. 어떻게 수정할까요?</div>
+
+          <button onClick={onEditOccurrence}
+                  style={{width: '100%', padding: 14, borderRadius: 14, border: `1px solid ${C.border}`, background: 'white', fontSize: 14, fontWeight: 700, color: C.text, cursor: 'pointer', marginBottom: 8, textAlign: 'left'}}>
+            {dateLabel} 날짜만 수정
+            <div style={{fontSize: 11, fontWeight: 400, color: C.muted, marginTop: 2}}>다른 날짜 루틴은 그대로 유지돼요</div>
+          </button>
+
+          <button onClick={onEditAll}
+                  style={{width: '100%', padding: 14, borderRadius: 14, border: 'none', background: '#FFEAEA', fontSize: 14, fontWeight: 700, color: '#FF5252', cursor: 'pointer', marginBottom: 8, textAlign: 'left'}}>
+            전체 수정 (모든 날짜)
+            <div style={{fontSize: 11, fontWeight: 400, color: '#FF5252', opacity: 0.8, marginTop: 2}}>이 루틴 자체가 바뀌어요. 반복되는 모든 날짜에 적용돼요</div>
           </button>
 
           <button onClick={onCancel}
