@@ -2052,20 +2052,21 @@ function CalendarView({ selectedDate, onSelect, todos, exclusions }) {
                   background: isSelected ? `linear-gradient(135deg, ${C.pinkDark}, ${C.lavender})` : isToday ? '#FFE4F0' : 'transparent',
                   color: dayColor, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', gap: 1,
                   fontSize: 13, fontWeight: isToday || isSelected || isHoliday || isSaturday ? 700 : 400,
-                  minHeight: Math.max(holidayName ? 40 : 30, 22 + maxRangeStack * 6)
+                  minHeight: (holidayName ? 44 : 28) + maxRangeStack * 6
                 }}>
-                  <span>{day}</span>
+                  <span style={{position: 'relative', zIndex: 1}}>{day}</span>
                   {holidayName && (
-                      <span style={{fontSize: 8, fontWeight: 600, lineHeight: 1.1, color: isSelected ? 'rgba(255,255,255,0.9)' : HOLIDAY_RED, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
+                      <span style={{position: 'relative', zIndex: 1, fontSize: 8, fontWeight: 600, lineHeight: 1.1, color: isSelected ? 'rgba(255,255,255,0.9)' : HOLIDAY_RED, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
                         {holidayName}
                       </span>
                   )}
                   {rangeTodos.length > 0 ? (
                       rangeTodos.map((rangeTodo, idx) => (
+                          // 양 끝(시작일/종료일)이 아니면 칸 사이 간격(그리드 gap)까지 막대를 늘려서 끊김 없이 이어 보이게 함
                           <div key={rangeTodo.id} style={{
-                            position: 'absolute', bottom: 3 + idx * 6, height: 4,
-                            left: rangeTodo.dueDate === dateStr ? 4 : 0,
-                            right: rangeTodo.endDate === dateStr ? 4 : 0,
+                            position: 'absolute', bottom: 3 + idx * 6, height: 4, zIndex: 0,
+                            left: rangeTodo.dueDate === dateStr ? 4 : -4,
+                            right: rangeTodo.endDate === dateStr ? 4 : -4,
                             background: isSelected ? 'rgba(255,255,255,0.9)' : (rangeTodo.categoryColor || C.pink),
                             borderTopLeftRadius: rangeTodo.dueDate === dateStr ? 2 : 0,
                             borderBottomLeftRadius: rangeTodo.dueDate === dateStr ? 2 : 0,
