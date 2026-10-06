@@ -331,7 +331,8 @@ export default function App() {
   const isToday = selectedDate === todayStr;
   // 선택한 날짜의 할 일: 그 날짜에 정확히 등록된 할 일 + 시작일이 지난 루틴 할 일(완료 여부는 그 날짜 기준)
   const selectedTodos = [
-    ...todos.filter(t => !t.isRoutine && t.dueDate === selectedDate),
+    ...todos.filter(t => !t.isRoutine && !t.endDate && t.dueDate === selectedDate),
+    ...todos.filter(t => !t.isRoutine && t.endDate && t.dueDate <= selectedDate && selectedDate <= t.endDate),
     ...todos.filter(t => t.isRoutine && t.dueDate <= selectedDate && !isRoutineExcludedOn(t.id, selectedDate))
         .map(t => ({...t, completed: isRoutineDoneOn(t.id, selectedDate)})),
   ];
